@@ -19,8 +19,6 @@ static void apply_safety_outputs(const ams_decision_t *decision)
     }
     HAL_GPIO_WritePin(AMS_SDC_ENABLE_GPIO_PORT, AMS_SDC_ENABLE_PIN,
         shutdown_state);
-    HAL_GPIO_WritePin(AMS_FAULT_GPIO_PORT, AMS_FAULT_PIN,
-        (shutdown_state == GPIO_PIN_SET) ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
 void ams_cycle_task(void *argument)

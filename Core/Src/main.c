@@ -82,7 +82,6 @@ static void MX_CAN1_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_SDIO_SD_Init(void);
 void StartDefaultTask(void *argument);
 
@@ -132,7 +131,6 @@ int main(void)
   MX_TIM2_Init();
   MX_CAN1_Init();
   MX_SPI1_Init();
-  MX_USB_OTG_FS_PCD_Init();
   MX_SDIO_SD_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
@@ -217,14 +215,13 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSI;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 16;
-  /* HSI 16 MHz / 16 * 336 / 2 = 168 MHz SYSCLK; PLLQ keeps USB at 48 MHz. */
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 8;
+  /* Board baseline: 8 MHz HSE / 8 * 336 / 2 = 168 MHz SYSCLK. */
   RCC_OscInitStruct.PLL.PLLN = 336;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 7;
@@ -269,7 +266,7 @@ static void MX_ADC1_Init(void)
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc1.Instance = ADC1;
-  /* PCLK2 is 84 MHz; /4 keeps the ADC clock within the F407 limit. */
+  /* PCLK2 is 84 MHz; /4 keeps the ADC clock within the F405 limit. */
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = ENABLE;
@@ -290,8 +287,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;
   const uint32_t adc_channels[ADC_CHANNEL_COUNT] = {
-    ADC_CHANNEL_10, ADC_CHANNEL_11, ADC_CHANNEL_12,
-    ADC_CHANNEL_13, ADC_CHANNEL_14, ADC_CHANNEL_15
+    ADC_CHANNEL_1, ADC_CHANNEL_2
   };
   for (uint32_t rank = 0; rank < ADC_CHANNEL_COUNT; rank++)
   {
@@ -476,41 +472,6 @@ static void MX_SPI1_Init(void)
 }
 
 /**
-  * @brief USB_OTG_FS Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USB_OTG_FS_PCD_Init(void)
-{
-
-  /* USER CODE BEGIN USB_OTG_FS_Init 0 */
-
-  /* USER CODE END USB_OTG_FS_Init 0 */
-
-  /* USER CODE BEGIN USB_OTG_FS_Init 1 */
-
-  /* USER CODE END USB_OTG_FS_Init 1 */
-  hpcd_USB_OTG_FS.Instance = USB_OTG_FS;
-  hpcd_USB_OTG_FS.Init.dev_endpoints = 4;
-  hpcd_USB_OTG_FS.Init.speed = PCD_SPEED_FULL;
-  hpcd_USB_OTG_FS.Init.dma_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.phy_itface = PCD_PHY_EMBEDDED;
-  hpcd_USB_OTG_FS.Init.Sof_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.low_power_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.lpm_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.vbus_sensing_enable = ENABLE;
-  hpcd_USB_OTG_FS.Init.use_dedicated_ep1 = DISABLE;
-  if (HAL_PCD_Init(&hpcd_USB_OTG_FS) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USB_OTG_FS_Init 2 */
-
-  /* USER CODE END USB_OTG_FS_Init 2 */
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -523,26 +484,28 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
 
   HAL_GPIO_WritePin(AMS_SDC_ENABLE_GPIO_PORT, AMS_SDC_ENABLE_PIN,
       GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(AMS_FAULT_GPIO_PORT, AMS_FAULT_PIN, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(AMS_AFE_CS_GPIO_PORT, AMS_AFE_CS_PIN, GPIO_PIN_SET);
 
-  GPIO_InitStruct.Pin = AMS_SDC_ENABLE_PIN | AMS_FAULT_PIN;
+  GPIO_InitStruct.Pin = AMS_SDC_ENABLE_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(AMS_SDC_ENABLE_GPIO_PORT, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PC6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Pin = AMS_AFE_CS_PIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(AMS_AFE_CS_GPIO_PORT, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = AMS_AFE_SPI_READY_PIN | AMS_AFE_NFAULT_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   /* USER CODE END MX_GPIO_Init_2 */
@@ -603,20 +566,18 @@ void Error_Handler(void)
   app.latched_faults |= AMS_FAULT_INTERNAL;
   app.shutdown_closed_request = 0U;
 
-  /* Establish the only available local fault indication even when failure
-   * happened before normal GPIO initialization completed. PA4 is not a
-   * substitute for the rule-required hardwired RTM lights or TSSI. */
-  __HAL_RCC_GPIOA_CLK_ENABLE();
+  /* Drive the provisional relay/SDC request low even when failure happened
+   * before normal GPIO initialization completed. */
+  __HAL_RCC_GPIOB_CLK_ENABLE();
   {
-    GPIO_InitTypeDef fault_gpio = {0};
+    GPIO_InitTypeDef shutdown_gpio = {0};
     HAL_GPIO_WritePin(AMS_SDC_ENABLE_GPIO_PORT, AMS_SDC_ENABLE_PIN,
         GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(AMS_FAULT_GPIO_PORT, AMS_FAULT_PIN, GPIO_PIN_SET);
-    fault_gpio.Pin = AMS_SDC_ENABLE_PIN | AMS_FAULT_PIN;
-    fault_gpio.Mode = GPIO_MODE_OUTPUT_PP;
-    fault_gpio.Pull = GPIO_NOPULL;
-    fault_gpio.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &fault_gpio);
+    shutdown_gpio.Pin = AMS_SDC_ENABLE_PIN;
+    shutdown_gpio.Mode = GPIO_MODE_OUTPUT_PP;
+    shutdown_gpio.Pull = GPIO_NOPULL;
+    shutdown_gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(AMS_SDC_ENABLE_GPIO_PORT, &shutdown_gpio);
   }
 
   /* A software reset records RCC_FLAG_SFTRST and avoids an indefinitely hung

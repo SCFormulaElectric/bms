@@ -51,7 +51,7 @@ $includeFlags = $includeDirectories | ForEach-Object {
 
 $commonFlags = @(
     '-mcpu=cortex-m4', '-mthumb', '-mfpu=fpv4-sp-d16',
-    '-mfloat-abi=hard', '-DUSE_HAL_DRIVER', '-DSTM32F407xx',
+    '-mfloat-abi=hard', '-DUSE_HAL_DRIVER', '-DSTM32F405xx',
     '-ffunction-sections', '-fdata-sections', '-Wall', '-Wextra',
     '--specs=nano.specs'
 )
@@ -104,7 +104,7 @@ try {
     $map = Join-Path $buildRoot 'bms_fsae.map'
     $hex = Join-Path $buildRoot 'bms_fsae.hex'
     $bin = Join-Path $buildRoot 'bms_fsae.bin'
-    $linkerScript = Join-Path $repoRoot 'STM32F407VETX_FLASH.ld'
+    $linkerScript = Join-Path $repoRoot 'STM32F405RGTX_FLASH.ld'
     $linkFlags = @(
         '-mcpu=cortex-m4', '-mthumb', '-mfpu=fpv4-sp-d16',
         '-mfloat-abi=hard', '--specs=nano.specs', '--specs=nosys.specs',

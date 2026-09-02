@@ -12,7 +12,8 @@
  * voltages and distributed temperatures must come through the AFE interface. */
 #define ADC_SNAPSHOT_MAX_AGE_MS 50U
 
-/* ADC1 channels are PC0..PC5, in this order. */
+/* Motherboard analog inputs are PA1/ADC1_IN1 then PA2/ADC1_IN2. Their final
+ * current/pack-voltage scaling remains part of hardware commissioning. */
 
 extern volatile uint16_t adc_dma_buffer[ADC_DMA_BUFFER_COUNT];
 

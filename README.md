@@ -8,12 +8,14 @@ Accumulator Management System (AMS).
 The repository contains a buildable, fail-closed AMS foundation. It is not
 ready to energize a tractive system.
 
-- Target MCU: STM32F407VET6
+- Target MCU: STM32F405RGT6, LQFP64
+- Board baseline: USC Custom_BMS motherboard pin map
 - Scheduler: FreeRTOS
 - Vehicle interface: CAN 2.0 at 500 kbit/s
 - AFE: not selected or commissioned
 - Accumulator topology: placeholder only
 - Shutdown output: compile-time locked open
+- TI daisy-chain bridge profile: not yet commissioned
 
 At startup the placeholder AFE reports `AMS_AFE_NOT_COMMISSIONED`. The critical
 cycle latches an AFE fault and keeps the active-high shutdown request low.
@@ -22,6 +24,12 @@ The acquisition layer is nonblocking and DMA-backed. SPI1 uses DMA2 Stream2
 for RX and DMA2 Stream3 for TX. Fixed ping-pong raw buffers feed separate
 decoded measurement ping-pong buffers; only complete, profile-validated samples
 are published to the safety logic.
+
+The project has been retargeted to the 2026-2027 motherboard design direction.
+Its F405 pin baseline is taken from the prior Custom_BMS hardware project:
+PA11/PA12 CAN, PA5/PA6/PA7 SPI1, PA4 AFE chip select, PA3 SPI ready,
+PA8 AFE fault, PA1/PA2 analog sensing, and PB0 provisional relay request.
+USB is disabled because it conflicts with CAN on PA11/PA12.
 
 ## Source layout
 
@@ -34,6 +42,7 @@ are published to the safety logic.
 - `tests/host`: hardware-independent unit tests
 - `docs/ARCHITECTURE.md`: safety boundaries and migration decisions
 - `docs/HARDWARE_CONTRACT.md`: information still required from the hardware team
+- `docs/F405_MIGRATION.md`: target, pin, and requirements migration record
 
 ## Build
 

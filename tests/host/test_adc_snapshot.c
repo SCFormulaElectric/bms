@@ -5,9 +5,9 @@
 #include "Peripherals/adc_snapshot.h"
 
 static const uint16_t scan_a[ADC_SNAPSHOT_CHANNEL_COUNT] =
-    {101U, 202U, 303U, 404U, 505U, 606U};
+    {101U, 202U};
 static const uint16_t scan_b[ADC_SNAPSHOT_CHANNEL_COUNT] =
-    {111U, 222U, 333U, 444U, 555U, 666U};
+    {111U, 222U};
 
 static void assert_scan(const adc_snapshot_t *snapshot,
     const uint16_t *expected)

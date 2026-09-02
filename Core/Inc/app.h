@@ -26,8 +26,8 @@
 #define LOG_QUEUE_LENGTH       64U
 #define KILOBYTE               256U
 
-#define AMS_FIRMWARE_VERSION   "ams-foundation-0.1.0"
-#define AMS_TARGET_MCU         "STM32F407VET6"
+#define AMS_FIRMWARE_VERSION   "ams-f405-motherboard-0.2.0"
+#define AMS_TARGET_MCU         "STM32F405RGT6"
 
 typedef struct {
     char line[LOG_MSG_MAX_LEN];

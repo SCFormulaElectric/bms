@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define ADC_SNAPSHOT_CHANNEL_COUNT 6U
+#define ADC_SNAPSHOT_CHANNEL_COUNT 2U
 #define ADC_SNAPSHOT_READ_RETRIES  3U
 
 typedef enum {
