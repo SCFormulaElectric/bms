@@ -35,6 +35,8 @@ typedef ams_afe_status_t (*ams_afe_decode_fn)(
 
 typedef struct {
     uint8_t commissioned;
+    uint16_t expected_cell_count;
+    uint16_t expected_temperature_count;
     uint32_t cell_conversion_ms;
     uint32_t temperature_conversion_ms;
     ams_afe_prepare_fn prepare;
@@ -84,7 +86,8 @@ ams_afe_status_t ams_afe_service(ams_afe_t *afe, uint32_t now_ms);
 ams_afe_status_t ams_afe_fetch_latest(const ams_afe_t *afe,
     ams_measurement_t *measurement, uint32_t *sample_counter);
 
-/* Returns NULL until an IC-specific profile is selected and implemented. */
+/* Returns NULL until BQ79600 wake/addressing and RDY-phased response handling
+ * are commissioned. The verified BQ frame/CRC codec is separate. */
 const ams_afe_profile_t *ams_afe_default_profile(void);
 
 #endif /* AMS_AFE_H */

@@ -19,15 +19,16 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include "fatfs.h"
 #include "app.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Peripherals/adc.h"
+#include "Ams/ams_config.h"
+#include "Ams/ams_persistence.h"
+#include "Ams/bq79600_bridge.h"
 #include "Peripherals/can_bus.h"
 #include "Peripherals/digital_pins.h"
-#include "Peripherals/usb_conf.h"
 #include "stm32f4xx_hal_adc.h"
 /* USER CODE END Includes */
 
@@ -82,7 +83,6 @@ static void MX_CAN1_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_SDIO_SD_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
@@ -110,7 +110,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  sd_card_owner = MCU_SD_CARD;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -131,9 +130,27 @@ int main(void)
   MX_TIM2_Init();
   MX_CAN1_Init();
   MX_SPI1_Init();
-  MX_SDIO_SD_Init();
-  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
+  {
+    bq79600_bringup_result_t bringup;
+
+    /* Topology is required by auto-addressing, so load the persisted runtime
+     * configuration before bringing the daisy chain online. */
+    ams_config_load_defaults(&app.config);
+    app.initial_soc_permille = 500U;
+    (void)ams_persistence_load(&app.config, &app.initial_soc_permille, NULL);
+    (void)bq79600_stack_bringup(&hspi1, app.config.segment_count, &bringup);
+    app.afe_bringup_status = (uint8_t)bringup.status;
+    app.afe_bringup_failed_step = (uint8_t)bringup.failed_step;
+    app.afe_verified_devices = bringup.verified_stack_devices;
+    app.afe_bridge_device_config = bringup.bridge_device_config;
+  }
+  if (app.afe_bringup_status != (uint8_t)BQ79600_BRINGUP_OK)
+  {
+    /* The critical task will latch the AFE communication fault. Keep booting
+     * so CAN can report the failure while all safety outputs remain off. */
+    app.active_faults |= AMS_FAULT_AFE_COMMUNICATION;
+  }
   adc_acquisition_init();
   if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_dma_buffer,
       ADC_DMA_BUFFER_COUNT) != HAL_OK ||
@@ -406,34 +423,6 @@ static void MX_IWDG_Init(void)
 }
 
 /**
-  * @brief SDIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SDIO_SD_Init(void)
-{
-
-  /* USER CODE BEGIN SDIO_Init 0 */
-
-  /* USER CODE END SDIO_Init 0 */
-
-  /* USER CODE BEGIN SDIO_Init 1 */
-
-  /* USER CODE END SDIO_Init 1 */
-  hsd.Instance = SDIO;
-  hsd.Init.ClockEdge = SDIO_CLOCK_EDGE_RISING;
-  hsd.Init.ClockBypass = SDIO_CLOCK_BYPASS_DISABLE;
-  hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
-  hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
-  hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
-  hsd.Init.ClockDiv = 0;
-  /* USER CODE BEGIN SDIO_Init 2 */
-
-  /* USER CODE END SDIO_Init 2 */
-
-}
-
-/**
   * @brief SPI1 Initialization Function
   * @param None
   * @retval None
@@ -456,7 +445,9 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  /* APB2 is 84 MHz; /16 = 5.25 MHz, inside the BQ79600 2-6 MHz
+   * bring-up range. */
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -485,16 +476,20 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
 
-  HAL_GPIO_WritePin(AMS_SDC_ENABLE_GPIO_PORT, AMS_SDC_ENABLE_PIN,
-      GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, AMS_STATUS_LED_PIN | AMS_CP_CONTROL_PIN |
+      AMS_DISCHARGE_ENABLE_PIN | AMS_CHARGE_ENABLE_PIN |
+      AMS_FAN_ENABLE_PIN, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(AMS_AFE_CS_GPIO_PORT, AMS_AFE_CS_PIN, GPIO_PIN_SET);
 
-  GPIO_InitStruct.Pin = AMS_SDC_ENABLE_PIN;
+  GPIO_InitStruct.Pin = AMS_STATUS_LED_PIN | AMS_CP_CONTROL_PIN |
+      AMS_DISCHARGE_ENABLE_PIN | AMS_CHARGE_ENABLE_PIN |
+      AMS_FAN_ENABLE_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(AMS_SDC_ENABLE_GPIO_PORT, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   GPIO_InitStruct.Pin = AMS_AFE_CS_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -502,10 +497,21 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(AMS_AFE_CS_GPIO_PORT, &GPIO_InitStruct);
 
-  GPIO_InitStruct.Pin = AMS_AFE_SPI_READY_PIN | AMS_AFE_NFAULT_PIN;
+  GPIO_InitStruct.Pin = AMS_AFE_SPI_READY_PIN | AMS_AFE_NFAULT_PIN |
+      AMS_PROXIMITY_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = AMS_CHARGE_ON_PIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(AMS_CHARGE_ON_GPIO_PORT, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = AMS_CP_DETECT_PIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(AMS_CP_DETECT_GPIO_PORT, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   /* USER CODE END MX_GPIO_Init_2 */
@@ -564,20 +570,24 @@ void Error_Handler(void)
   app.ams_state = AMS_STATE_FAULT_LATCHED;
   app.active_faults |= AMS_FAULT_INTERNAL;
   app.latched_faults |= AMS_FAULT_INTERNAL;
-  app.shutdown_closed_request = 0U;
+  app.discharge_enable_request = 0U;
+  app.charge_enable_request = 0U;
+  app.fan_enable_request = 0U;
 
-  /* Drive the provisional relay/SDC request low even when failure happened
+  /* Deassert every external low-side control even when failure happened
    * before normal GPIO initialization completed. */
   __HAL_RCC_GPIOB_CLK_ENABLE();
   {
     GPIO_InitTypeDef shutdown_gpio = {0};
-    HAL_GPIO_WritePin(AMS_SDC_ENABLE_GPIO_PORT, AMS_SDC_ENABLE_PIN,
+    HAL_GPIO_WritePin(GPIOB, AMS_DISCHARGE_ENABLE_PIN |
+        AMS_CHARGE_ENABLE_PIN | AMS_FAN_ENABLE_PIN | AMS_CP_CONTROL_PIN,
         GPIO_PIN_RESET);
-    shutdown_gpio.Pin = AMS_SDC_ENABLE_PIN;
+    shutdown_gpio.Pin = AMS_DISCHARGE_ENABLE_PIN |
+        AMS_CHARGE_ENABLE_PIN | AMS_FAN_ENABLE_PIN | AMS_CP_CONTROL_PIN;
     shutdown_gpio.Mode = GPIO_MODE_OUTPUT_PP;
     shutdown_gpio.Pull = GPIO_NOPULL;
     shutdown_gpio.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(AMS_SDC_ENABLE_GPIO_PORT, &shutdown_gpio);
+    HAL_GPIO_Init(GPIOB, &shutdown_gpio);
   }
 
   /* A software reset records RCC_FLAG_SFTRST and avoids an indefinitely hung

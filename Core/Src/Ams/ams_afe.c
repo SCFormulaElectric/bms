@@ -99,6 +99,10 @@ ams_afe_status_t ams_afe_initialize(ams_afe_t *afe,
     afe->spi = spi;
     afe->profile = profile;
     if (profile == NULL || profile->commissioned == 0U ||
+        profile->expected_cell_count == 0U ||
+        profile->expected_cell_count > AMS_MAX_CELLS ||
+        profile->expected_temperature_count == 0U ||
+        profile->expected_temperature_count > AMS_MAX_TEMPERATURES ||
         profile->prepare == NULL || profile->decode == NULL) {
         afe->state = AMS_AFE_PIPELINE_FAULT;
         afe->terminal_status = AMS_AFE_NOT_COMMISSIONED;
@@ -190,9 +194,10 @@ ams_afe_status_t ams_afe_service(ams_afe_t *afe, uint32_t now_ms)
             } else if (afe->pending_transaction ==
                 AMS_AFE_TRANSACTION_READ_DIAGNOSTICS) {
                 if (working->status != AMS_SAMPLE_VALID ||
-                    working->valid_cell_count != AMS_MAX_CELLS ||
+                    working->valid_cell_count !=
+                        afe->profile->expected_cell_count ||
                     working->valid_temperature_count !=
-                        AMS_MAX_TEMPERATURES) {
+                        afe->profile->expected_temperature_count) {
                     return fail_pipeline(afe, AMS_AFE_INVALID_DATA);
                 }
                 working->timestamp_ms = now_ms;

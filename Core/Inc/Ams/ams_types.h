@@ -41,9 +41,12 @@ typedef enum {
     AMS_FAULT_CELL_UNDERVOLTAGE     = (1UL << 4),
     AMS_FAULT_OVERTEMPERATURE       = (1UL << 5),
     AMS_FAULT_UNDERTEMPERATURE      = (1UL << 6),
-    AMS_FAULT_OVERCURRENT           = (1UL << 7),
+    AMS_FAULT_DISCHARGE_OVERCURRENT = (1UL << 7),
     AMS_FAULT_SENSOR_PLAUSIBILITY   = (1UL << 8),
-    AMS_FAULT_INTERNAL              = (1UL << 9)
+    AMS_FAULT_INTERNAL              = (1UL << 9),
+    AMS_FAULT_CHARGE_OVERCURRENT    = (1UL << 10),
+    AMS_FAULT_CONFIGURATION         = (1UL << 11),
+    AMS_FAULT_CURRENT_SENSOR        = (1UL << 12)
 } ams_fault_t;
 
 typedef struct {
@@ -59,7 +62,9 @@ typedef struct {
     ams_state_t state;
     uint32_t active_faults;
     uint32_t latched_faults;
-    uint8_t shutdown_closed_request;
+    uint8_t discharge_enable_request;
+    uint8_t charge_enable_request;
+    uint8_t fan_enable_request;
     ams_fault_record_t first_fault;
 } ams_decision_t;
 

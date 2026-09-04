@@ -1,30 +1,41 @@
-# Hardware contract required for implementation
+# Hardware commissioning contract
 
-The STM32F405RG target and provisional motherboard pin map are established, but
-the following items must be supplied before the driver and outputs can be
-commissioned:
+## Confirmed from the Custom_BMS design
 
-- final TI monitor and bridge part numbers (the historical code suggests a
-  BQ79600-family bridge, but this is not yet a commissioned selection);
-- confirmed SPI mode, maximum clock, chip-select pin, and wake timing;
-- number and order of devices in the daisy chain;
-- cells and temperature channels wired to every device;
-- PEC/CRC behavior, conversion modes, and maximum transaction timing;
-- thermistor part number, divider topology, reference voltage, and calibration;
-- pack-current sensor part number, polarity, range, bandwidth, and interface;
-- pack-side and vehicle-side voltage measurement interfaces;
-- AIR, precharge, discharge, and welded-contactor feedback signals;
-- confirmation that PB0 is the relay/SDC request, including polarity, driver
-  circuit, reset state, and open-wire behavior;
-- confirmation that the motherboard external oscillator is 8 MHz;
-- EEPROM part number, bus, address, endurance, and fault-record format;
-- UART pins and electrical interface;
-- ELCON charger model, CAN identifiers, command scaling, and timeout behavior;
-- non-programmable AMS/IMD latch and manual-reset circuit behavior;
-- charger presence, charger-enable, and charging-SDC interfaces;
-- balancing resistor value, thermal limits, and allowable operating modes;
-- final cell data-sheet voltage, current, and temperature limits;
-- competition/rulebook jurisdiction and approved 2026/2027 revision.
+- STM32F405RGTx, LQFP64, 8 MHz HSE;
+- BQ79600-Q1 on SPI1: PA3 RDY, PA4 nCS, PA5 SCLK, PA6 MISO, PA7 MOSI,
+  PA8 nFAULT;
+- BQ79616-Q1 daughterboards, 12 routed cell channels and four routed
+  thermistor channels per segment;
+- PA1 and PA2 are the two external-current-sensor analog inputs;
+- CAN1 on PA11/PA12 through SN65HVD230 at 500 kbit/s;
+- USART1 on PA9/PA10 at J5;
+- PB0 green LED;
+- PB3 discharge, PB4 charge and PB6 fan low-side controls;
+- PB5 CHARGE_ON, PB1 CP_CTRL, PA15 proximity and PC10 CP_DETECT;
+- no external EEPROM and no SD-card interface.
 
-Until these are reviewed, the AFE reports not commissioned and the SDC request
-cannot be asserted.
+## Evidence required before output commissioning
+
+- installed current-sensor part number, which of PA1/PA2 is authoritative,
+  measured zero offset, gain, safe range and sign;
+- thermistor part number and validated ADC-code-to-temperature conversion;
+- final number/order of segments and populated channels;
+- cell manufacturer limits and approved operational thresholds;
+- bench confirmation of PB3/PB4/PB6 downstream polarity, reset behavior,
+  broken-wire behavior and interaction with the shutdown circuit;
+- non-programmable AMS/IMD latch and manual-reset behavior;
+- oscilloscope verification of the implemented BQ79600 GPIO/stack wake timing,
+  5.25 MHz SPI traffic and SPI_RDY behavior on this layout;
+- confirmation that CAN frame 0x506 reports status 0, equal configured and
+  verified segment counts, and bridge DEVICE_CONFIG 0x14;
+- BQ79616 measurement setup, open-wire diagnostics, protector configuration
+  and conversion timing verified against physical hardware;
+- balancing resistor thermal characterization and proof that balancing stops
+  whenever the shutdown circuit is open;
+- charger model, CAN protocol, charger-presence behavior and charging shutdown
+  integration;
+- final CAN DBC and GUI configuration authorization policy.
+
+Until these are complete, the AFE and external-output commissioning paths must
+remain disabled.

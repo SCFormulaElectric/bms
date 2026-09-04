@@ -34,12 +34,16 @@ static void record_first_fault(ams_decision_t *decision, uint32_t bit,
     decision->first_fault.channel = channel;
 }
 
-void ams_controller_initialize(ams_controller_t *controller)
+void ams_controller_initialize(ams_controller_t *controller,
+    const ams_config_t *config)
 {
     if (controller == NULL) {
         return;
     }
     memset(controller, 0, sizeof(*controller));
+    if (config != NULL) {
+        controller->config = *config;
+    }
     controller->decision.state = AMS_STATE_INIT;
 }
 
@@ -49,82 +53,126 @@ void ams_controller_step(ams_controller_t *controller,
 {
     uint32_t faults = immediate_faults;
     uint16_t index;
+    uint16_t expected_cells;
+    uint16_t expected_temperatures;
+    uint8_t discharge_allowed = 1U;
+    uint8_t charge_allowed = 1U;
 
     if (controller == NULL) {
         return;
     }
-    controller->decision.shutdown_closed_request = 0U;
+    controller->decision.discharge_enable_request = 0U;
+    controller->decision.charge_enable_request = 0U;
+    controller->decision.fan_enable_request = 0U;
 
-    if (AMS_TOPOLOGY_COMMISSIONED == 0U) {
-        faults |= AMS_FAULT_NOT_COMMISSIONED;
+    if (ams_config_is_valid(&controller->config) == 0U) {
+        faults |= AMS_FAULT_CONFIGURATION | AMS_FAULT_NOT_COMMISSIONED;
     }
+    expected_cells = ams_config_cell_count(&controller->config);
+    expected_temperatures =
+        ams_config_temperature_count(&controller->config);
     if (measurement == NULL || measurement->status != AMS_SAMPLE_VALID ||
-        measurement->valid_cell_count != AMS_MAX_CELLS ||
-        measurement->valid_temperature_count != AMS_MAX_TEMPERATURES) {
+        measurement->valid_cell_count != expected_cells ||
+        measurement->valid_temperature_count != expected_temperatures ||
+        (uint32_t)(now_ms - measurement->timestamp_ms) >
+            controller->config.measurement_max_age_ms) {
         faults |= AMS_FAULT_AFE_COMMUNICATION;
     } else {
-        for (index = 0U; index < measurement->valid_cell_count; index++) {
+        int16_t maximum_temperature = measurement->temperature_dc[0];
+        for (index = 0U; index < expected_cells; index++) {
             const int32_t voltage = measurement->cell_voltage_mv[index];
+            const uint16_t segment =
+                (uint16_t)(index / controller->config.cells_per_segment);
+            const uint16_t channel =
+                (uint16_t)(index % controller->config.cells_per_segment);
+            if (voltage <= AMS_CELL_SOC_EMPTY_MV) {
+                discharge_allowed = 0U;
+            }
+            if (voltage >= controller->config.cell_overvoltage_mv) {
+                charge_allowed = 0U;
+            }
             if (persistence_elapsed(&controller->voltage_high_active[index],
                 &controller->voltage_high_since[index],
-                (voltage > AMS_CELL_OVERVOLTAGE_MV) ? 1U : 0U,
-                now_ms, AMS_VOLTAGE_CURRENT_PERSIST_MS) != 0U) {
+                (voltage > controller->config.cell_overvoltage_mv) ? 1U : 0U,
+                now_ms, controller->config.voltage_current_persist_ms) != 0U) {
                 faults |= AMS_FAULT_CELL_OVERVOLTAGE;
                 record_first_fault(&controller->decision,
                     AMS_FAULT_CELL_OVERVOLTAGE, now_ms, voltage,
-                    AMS_CELL_OVERVOLTAGE_MV,
-                    (uint16_t)(index / AMS_CELLS_PER_SEGMENT),
-                    (uint16_t)(index % AMS_CELLS_PER_SEGMENT));
+                    controller->config.cell_overvoltage_mv, segment, channel);
             }
             if (persistence_elapsed(&controller->voltage_low_active[index],
                 &controller->voltage_low_since[index],
-                (voltage < AMS_CELL_UNDERVOLTAGE_MV) ? 1U : 0U,
-                now_ms, AMS_VOLTAGE_CURRENT_PERSIST_MS) != 0U) {
+                (voltage < controller->config.cell_undervoltage_mv) ? 1U : 0U,
+                now_ms, controller->config.voltage_current_persist_ms) != 0U) {
                 faults |= AMS_FAULT_CELL_UNDERVOLTAGE;
                 record_first_fault(&controller->decision,
                     AMS_FAULT_CELL_UNDERVOLTAGE, now_ms, voltage,
-                    AMS_CELL_UNDERVOLTAGE_MV,
-                    (uint16_t)(index / AMS_CELLS_PER_SEGMENT),
-                    (uint16_t)(index % AMS_CELLS_PER_SEGMENT));
+                    controller->config.cell_undervoltage_mv, segment, channel);
             }
         }
-        for (index = 0U; index < measurement->valid_temperature_count;
-            index++) {
+        for (index = 0U; index < expected_temperatures; index++) {
             const int32_t temperature = measurement->temperature_dc[index];
+            const uint16_t segment = (uint16_t)(index /
+                controller->config.temperatures_per_segment);
+            const uint16_t channel = (uint16_t)(index %
+                controller->config.temperatures_per_segment);
+            if (temperature > maximum_temperature) {
+                maximum_temperature = (int16_t)temperature;
+            }
             if (persistence_elapsed(
                 &controller->temperature_high_active[index],
                 &controller->temperature_high_since[index],
-                (temperature > AMS_CELL_MAX_TEMPERATURE_DC) ? 1U : 0U,
-                now_ms, AMS_TEMPERATURE_PERSIST_MS) != 0U) {
+                (temperature > controller->config.cell_max_temperature_dc) ?
+                    1U : 0U, now_ms,
+                controller->config.temperature_persist_ms) != 0U) {
                 faults |= AMS_FAULT_OVERTEMPERATURE;
                 record_first_fault(&controller->decision,
                     AMS_FAULT_OVERTEMPERATURE, now_ms, temperature,
-                    AMS_CELL_MAX_TEMPERATURE_DC,
-                    (uint16_t)(index / AMS_TEMPS_PER_SEGMENT),
-                    (uint16_t)(index % AMS_TEMPS_PER_SEGMENT));
+                    controller->config.cell_max_temperature_dc,
+                    segment, channel);
             }
             if (persistence_elapsed(
                 &controller->temperature_low_active[index],
                 &controller->temperature_low_since[index],
-                (temperature < AMS_CELL_MIN_TEMPERATURE_DC) ? 1U : 0U,
-                now_ms, AMS_TEMPERATURE_PERSIST_MS) != 0U) {
+                (temperature < controller->config.cell_min_temperature_dc) ?
+                    1U : 0U, now_ms,
+                controller->config.temperature_persist_ms) != 0U) {
                 faults |= AMS_FAULT_UNDERTEMPERATURE;
                 record_first_fault(&controller->decision,
                     AMS_FAULT_UNDERTEMPERATURE, now_ms, temperature,
-                    AMS_CELL_MIN_TEMPERATURE_DC,
-                    (uint16_t)(index / AMS_TEMPS_PER_SEGMENT),
-                    (uint16_t)(index % AMS_TEMPS_PER_SEGMENT));
+                    controller->config.cell_min_temperature_dc,
+                    segment, channel);
             }
         }
-        if (persistence_elapsed(&controller->overcurrent_active,
-            &controller->overcurrent_since,
-            (measurement->pack_current_ma > AMS_CELL_OVERCURRENT_MA ||
-             measurement->pack_current_ma < -AMS_CELL_OVERCURRENT_MA) ? 1U : 0U,
-            now_ms, AMS_VOLTAGE_CURRENT_PERSIST_MS) != 0U) {
-            faults |= AMS_FAULT_OVERCURRENT;
+        if (maximum_temperature >=
+            controller->config.fan_on_temperature_dc &&
+            AMS_HARDWARE_OUTPUTS_COMMISSIONED != 0U) {
+            controller->decision.fan_enable_request = 1U;
+        }
+        if (persistence_elapsed(&controller->discharge_overcurrent_active,
+            &controller->discharge_overcurrent_since,
+            (measurement->pack_current_ma >
+                (int32_t)controller->config.discharge_current_limit_ma) ?
+                1U : 0U, now_ms,
+            controller->config.voltage_current_persist_ms) != 0U) {
+            faults |= AMS_FAULT_DISCHARGE_OVERCURRENT;
             record_first_fault(&controller->decision,
-                AMS_FAULT_OVERCURRENT, now_ms,
-                measurement->pack_current_ma, AMS_CELL_OVERCURRENT_MA,
+                AMS_FAULT_DISCHARGE_OVERCURRENT, now_ms,
+                measurement->pack_current_ma,
+                (int32_t)controller->config.discharge_current_limit_ma,
+                0U, 0U);
+        }
+        if (persistence_elapsed(&controller->charge_overcurrent_active,
+            &controller->charge_overcurrent_since,
+            (measurement->pack_current_ma <
+                -(int32_t)controller->config.charge_current_limit_ma) ?
+                1U : 0U, now_ms,
+            controller->config.voltage_current_persist_ms) != 0U) {
+            faults |= AMS_FAULT_CHARGE_OVERCURRENT;
+            record_first_fault(&controller->decision,
+                AMS_FAULT_CHARGE_OVERCURRENT, now_ms,
+                measurement->pack_current_ma,
+                -(int32_t)controller->config.charge_current_limit_ma,
                 0U, 0U);
         }
     }
@@ -141,6 +189,7 @@ void ams_controller_step(ams_controller_t *controller,
 
     if (controller->decision.latched_faults == AMS_FAULT_NONE &&
         AMS_HARDWARE_OUTPUTS_COMMISSIONED != 0U) {
-        controller->decision.shutdown_closed_request = 1U;
+        controller->decision.discharge_enable_request = discharge_allowed;
+        controller->decision.charge_enable_request = charge_allowed;
     }
 }

@@ -1,57 +1,45 @@
-# Formula SAE Accumulator Management System Firmware
+# USC Formula SAE Custom BMS Firmware
 
-Custom STM32 firmware for a Formula SAE / Formula Student electric vehicle
-Accumulator Management System (AMS).
+STM32F405RG firmware targeting the USC Custom_BMS motherboard and BQ79616
+daughterboards.
 
-## Current status
+## Implemented foundation
 
-The repository contains a buildable, fail-closed AMS foundation. It is not
-ready to energize a tractive system.
+- confirmed motherboard pin map and fail-safe GPIO reset states;
+- CAN 2.0 telemetry at 500 kbit/s;
+- runtime pack configuration for 1-8 segments, 6-12 cells and 1-4
+  temperatures per segment;
+- configurable voltage, temperature, charge-current and discharge-current
+  limits, capacity, current calibration and current polarity;
+- RAM-resident measurements and battery state;
+- coulomb-counted SOC, five configurable rested-voltage drift points, full
+  anchor, and an unconditional 0% anchor when any active cell is at or below
+  3.000 V;
+- separate charge, discharge and fan requests;
+- latched fault logic and first-fault capture;
+- CRC-checked, versioned internal-flash records for configuration and SOC;
+- complete early-boot BQ79600/BQ79616 forward bring-up: dual GPIO wake,
+  stack wake, write/read DLL synchronization, auto-addressing, top-of-stack
+  setup, CRC-checked address verification and bridge identity verification;
+- CAN AFE bring-up diagnostics with status, failed step, configured/verified
+  segment counts and the bridge DEVICE_CONFIG value;
+- TI-reference-tested BQ796xx command frame and CRC codec;
+- nonblocking SPI/DMA acquisition framework and host tests.
 
-- Target MCU: STM32F405RGT6, LQFP64
-- Board baseline: USC Custom_BMS motherboard pin map
-- Scheduler: FreeRTOS
-- Vehicle interface: CAN 2.0 at 500 kbit/s
-- AFE: not selected or commissioned
-- Accumulator topology: placeholder only
-- Shutdown output: compile-time locked open
-- TI daisy-chain bridge profile: not yet commissioned
+## Safety status
 
-At startup the placeholder AFE reports `AMS_AFE_NOT_COMMISSIONED`. The critical
-cycle latches an AFE fault and keeps the active-high shutdown request low.
+This firmware is not ready to energize the tractive system. The compile-time
+hardware-output gate remains disabled. BQ79616 measurement/protection register
+configuration and channel decoding are not yet connected to the acquisition
+framework, so the firmware intentionally reports an AFE communication fault
+and keeps charge/discharge outputs deasserted even after successful bring-up.
 
-The acquisition layer is nonblocking and DMA-backed. SPI1 uses DMA2 Stream2
-for RX and DMA2 Stream3 for TX. Fixed ping-pong raw buffers feed separate
-decoded measurement ping-pong buffers; only complete, profile-validated samples
-are published to the safety logic.
-
-The project has been retargeted to the 2026-2027 motherboard design direction.
-Its F405 pin baseline is taken from the prior Custom_BMS hardware project:
-PA11/PA12 CAN, PA5/PA6/PA7 SPI1, PA4 AFE chip select, PA3 SPI ready,
-PA8 AFE fault, PA1/PA2 analog sensing, and PB0 provisional relay request.
-USB is disabled because it conflicts with CAN on PA11/PA12.
-
-## Source layout
-
-- `Core/Inc/Ams` and `Core/Src/Ams`: hardware-independent AMS types, AFE
-  interface, and fault/state logic
-- `Core/Src/Tasks/Critical/ams_cycle_task.c`: measurement-to-shutdown critical
-  cycle and watchdog heartbeat
-- `Core/Src/Tasks/CAN`: non-safety-authoritative diagnostic CAN transmission
-- `Core/Src/Tasks/DAQ`: optional logging
-- `tests/host`: hardware-independent unit tests
-- `docs/ARCHITECTURE.md`: safety boundaries and migration decisions
-- `docs/HARDWARE_CONTRACT.md`: information still required from the hardware team
-- `docs/F405_MIGRATION.md`: target, pin, and requirements migration record
+Do not enable AMS_HARDWARE_OUTPUTS_COMMISSIONED until the items in
+docs/HARDWARE_CONTRACT.md have bench-test evidence.
 
 ## Build
 
-From PowerShell:
+From PowerShell, run tools/build.ps1 for Debug or Release.
 
-```powershell
-.\tools\build.ps1 -Configuration Debug
-.\tools\build.ps1 -Configuration Release
-```
-
-Do not set either commissioning gate in `Core/Inc/Ams/ams_config.h` until the
-corresponding hardware review and test evidence exist.
+The final 128 KiB flash sector is excluded from the application image and
+reserved for the configuration/SOC journal.

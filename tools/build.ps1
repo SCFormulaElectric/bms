@@ -64,7 +64,11 @@ if ($Configuration -eq 'Debug') {
 $sourceRoots = @('Core', 'Drivers', 'FATFS', 'Middlewares') |
     ForEach-Object { Join-Path $repoRoot $_ }
 $sources = Get-ChildItem -Path $sourceRoots -Recurse -File |
-    Where-Object { $_.Extension -in @('.c', '.s') } |
+    Where-Object {
+        $_.Extension -in @('.c', '.s') -and
+        $_.FullName -notlike '*\Middlewares\Third_Party\FatFs\*' -and
+        $_.FullName -notlike '*\FATFS\*'
+    } |
     Sort-Object FullName
 
 $objects = [System.Collections.Generic.List[string]]::new()

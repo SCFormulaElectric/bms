@@ -1,71 +1,67 @@
-# AMS firmware architecture
+# BMS firmware architecture
 
-## Safety boundary
+## Data ownership
 
-The firmware may request that the AMS shutdown-circuit power stage remain
-closed. It is not the power stage itself. The hardware must be de-energized-open
-and must open the shutdown circuit on MCU reset, loss of power, broken wiring,
-or loss of the software request.
+Cell voltages, temperatures, current, extrema, SOC and fault state live in RAM.
+They are published over CAN for the vehicle logger and GUI; they are not
+continuously copied to flash. Internal flash stores only validated configuration
+records and occasional SOC checkpoints.
 
-No CAN or USB message is safety-authoritative. Manual fault reset and contactor
-activation are intentionally absent from this foundation.
+The BQ79600 does not autonomously write STM32 RAM. The STM32 initiates SPI
+transactions and its DMA controller copies SPI bytes into fixed ping-pong RAM
+buffers. Complete decoded snapshots are atomically published to the safety
+logic.
+
+Before DMA or the scheduler starts, firmware loads the persisted topology and
+runs the complete forward-direction bring-up. The board driver temporarily
+changes PA7 from SPI1_MOSI to a GPIO and emits two wake pulses: nCS setup for
+2 us, MOSI low for 2.75 ms, and nCS hold for 2 us. It restores PA7 to SPI,
+wakes the daisy chain, synchronizes both communication DLL directions,
+auto-addresses the configured BQ79616 devices, marks the top device, then reads
+back every address and the BQ79600 DEVICE_CONFIG register with CRC validation.
+
+Any transport, CRC, addressing or identity failure records an exact status and
+failed step, latches the AFE communication fault, and leaves safety outputs off.
+CAN frame 0x506 reports the status, step, configured segment count, verified
+segment count and bridge DEVICE_CONFIG value for bring-up troubleshooting.
 
 ## Critical cycle
 
-The watchdog-proven cycle is:
+The watchdog-proven path acquires and validates every configured channel,
+applies current calibration/polarity, updates SOC, evaluates persistence-qualified
+limits, latches faults, updates charge/discharge/fan outputs, and then publishes
+the watchdog heartbeat. CAN transmission is diagnostic and cannot hold up this
+path.
 
-1. acquire all AFE measurements;
-2. validate completeness and communication status;
-3. evaluate immediate and persistence-qualified faults;
-4. latch confirmed faults;
-5. update the shutdown request and fault indicator;
-6. publish the watchdog heartbeat.
+Positive pack current means discharge; negative means charge. The polarity
+configuration is applied before coulomb counting and current-limit checks.
 
-The watchdog is refreshed only after this whole sequence has completed.
-Logging, CAN, USB, and SD-card availability are excluded from the critical
-heartbeat set.
+Any active cell at or below 3.000 V immediately anchors usable SOC to 0% and
+blocks discharge. The configurable undervoltage fault still uses its configured
+persistence interval. Rested-voltage drift correction uses five monotonic,
+configurable voltage/SOC points after current remains below the rest threshold.
 
-## AFE DMA pipeline
+## Safety outputs
 
-The AFE does not directly control STM32 memory. The STM32 starts each SPI/isoSPI
-transaction and DMA moves bytes between the SPI data register and fixed RAM
-buffers. The nonblocking pipeline is:
+PB3, PB4 and PB6 drive low-side stages for the external active-low discharge,
+charge and fan control nets. MCU reset drives the gates low (MOSFETs off).
+Firmware requests are separate and default off. PB0 is only the green status
+LED.
 
-1. DMA-send the cell-conversion command;
-2. wait the device-profile conversion interval;
-3. DMA-read and decode all cell groups;
-4. DMA-send the auxiliary/temperature conversion command;
-5. wait the auxiliary conversion interval;
-6. DMA-read and decode all temperature groups;
-7. DMA-read and validate diagnostics;
-8. atomically publish the completed measurement buffer.
+The firmware output gate is compile-time-only and defaults off. CAN is never
+safety-authoritative. Faults latch; a manual reset policy must be implemented
+and validated with the non-programmable shutdown circuitry.
 
-Raw TX/RX storage and decoded measurements both use ping-pong buffers. DMA
-callbacks only mark transfer completion or error and release chip select. They
-do not publish measurements or make safety decisions. Every transfer has a
-fixed length and timeout. The device profile must perform PEC/CRC validation
-and return an error before publication when any device or register group is
-invalid.
+## Internal flash
 
-## Fault persistence
+STM32 sector 11 is an append-only record journal. Each record has a magic
+number, schema version, sequence, complete configuration, SOC checkpoint and
+CRC-32. Invalid/torn records are ignored. Erase/program calls are rejected
+while charge or discharge outputs are active. Saving must run from a maintenance
+or shutdown context, not the critical cycle.
 
-Voltage and current thresholds use a 500 ms persistence window and temperature
-thresholds use a 1000 ms persistence window as the current 2026 Formula Student
-baseline. A transient violation resets only its pending timer. Once a fault is
-confirmed, the resulting shutdown fault is latched and is not debounced or
-automatically cleared.
-
-AFE communication failure, incomplete measurement sets, uncommissioned
-topology, and internal software failures are immediate fail-closed faults.
-
-## Commissioning gates
-
-`AMS_TOPOLOGY_COMMISSIONED` proves that cell/segment/sensor counts and limits
-match the reviewed accumulator design.
-
-`AMS_HARDWARE_OUTPUTS_COMMISSIONED` proves that output polarity, open-wire
-behavior, the non-programmable power stage, manual latch/reset, AIR feedback,
-and bench fault injection have been verified.
-
-Both gates default to zero and are deliberately unavailable through CAN, USB,
-or runtime configuration.
+If the sector fills, it is erased before the next record. A power interruption
+during that erase can lose the saved configuration, so the application must
+fall back safely and require configuration verification. A two-sector
+transactional store can be added if retaining configuration through arbitrary
+power loss is required.
