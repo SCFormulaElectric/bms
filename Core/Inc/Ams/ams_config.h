@@ -21,6 +21,10 @@
 #define AMS_AFE_DMA_TIMEOUT_MS              5U
 #define AMS_AFE_SERVICE_POLL_MS             1U
 #define AMS_CRITICAL_CYCLE_PERIOD_MS        20U
+#define AMS_PERIODIC_CAN_DEFAULT_ID       0x5F0U
+#define AMS_PERIODIC_CAN_DEFAULT_FRAMES       2U
+#define AMS_PERIODIC_CAN_MIN_FRAMES           1U
+#define AMS_PERIODIC_CAN_MAX_FRAMES           2U
 
 /* The PCB mapping is known, but energizing outputs remains locked until the
  * external 12 V interface polarity and shutdown behavior are bench-tested. */
@@ -53,6 +57,8 @@ typedef struct {
     uint32_t measurement_max_age_ms;
     uint32_t soc_drift_rest_current_ma;
     uint32_t soc_drift_rest_ms;
+    uint16_t periodic_can_base_id;
+    uint8_t periodic_can_frame_count;
     ams_soc_drift_point_t soc_drift_points[AMS_SOC_DRIFT_POINT_COUNT];
 } ams_config_t;
 

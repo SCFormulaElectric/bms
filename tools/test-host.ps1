@@ -5,6 +5,11 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 $tests = @(
     @{
+        Name = 'ams_config'
+        Sources = @('tests\host\test_ams_config.c',
+            'Core\Src\Ams\ams_config.c')
+    },
+    @{
         Name = 'ams_controller'
         Sources = @('tests\host\test_ams_controller.c',
             'Core\Src\Ams\ams_controller.c', 'Core\Src\Ams\ams_config.c')

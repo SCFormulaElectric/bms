@@ -29,6 +29,7 @@ void create_app(void)
     app.task_entries[ams_cycle_task_index] = create_ams_cycle_task(&app);
     app.task_entries[can_transmitter_task_index] =
         create_can_transmitter_task(&app);
+    app.task_entries[bms_summary_task_index] = create_bms_summary_task(&app);
     app.task_entries[independent_watchdog_task_index] =
         create_independent_watchdog_task(&app);
 

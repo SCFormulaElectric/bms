@@ -14,10 +14,11 @@
 #include "queue.h"
 #include "task.h"
 
-#define NUM_TASKS              3U
+#define NUM_TASKS              4U
 #define AMS_CYCLE_PRIO         16U
 #define IWDG_PRIO              16U
 #define CAN_PRIO               10U
+#define BMS_SUMMARY_PRIO        4U
 
 #define CAN_QUEUE_LENGTH       16U
 #define LOG_MSG_MAX_LEN        128U
@@ -48,6 +49,11 @@ typedef struct app_data_s {
     volatile uint8_t charge_enable_request;
     volatile uint8_t fan_enable_request;
     volatile uint16_t soc_permille;
+    volatile int32_t pack_voltage_mv;
+    volatile int32_t pack_current_ma;
+    volatile uint16_t minimum_cell_mv;
+    volatile uint16_t maximum_cell_mv;
+    volatile int16_t maximum_temperature_dc;
     volatile uint8_t boot_healthy;
     ams_config_t config;
     uint16_t initial_soc_permille;

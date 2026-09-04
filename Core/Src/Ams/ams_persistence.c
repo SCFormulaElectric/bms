@@ -8,7 +8,7 @@
 #define AMS_FLASH_SECTOR_ADDRESS  0x080E0000UL
 #define AMS_FLASH_SECTOR_BYTES    (128UL * 1024UL)
 #define AMS_FLASH_RECORD_MAGIC    0x414D5343UL
-#define AMS_FLASH_RECORD_VERSION  1U
+#define AMS_FLASH_RECORD_VERSION  2U
 
 typedef struct {
     uint32_t magic;
@@ -66,6 +66,16 @@ static const ams_flash_record_t *latest_record(uint32_t *next_address)
         const ams_flash_record_t *candidate =
             (const ams_flash_record_t *)address;
         if (candidate->magic == 0xFFFFFFFFUL) {
+            break;
+        }
+        /* A known record from another schema has a different stride. Do not
+         * scan or append using the new stride; force a sector erase on the
+         * next save so records can never overlap. */
+        if (candidate->magic == AMS_FLASH_RECORD_MAGIC &&
+            (candidate->version != AMS_FLASH_RECORD_VERSION ||
+             candidate->record_bytes != sizeof(*candidate))) {
+            latest = NULL;
+            address = AMS_FLASH_SECTOR_ADDRESS;
             break;
         }
         if (record_valid(candidate) != 0U &&

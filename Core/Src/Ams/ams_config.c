@@ -37,6 +37,8 @@ void ams_config_load_defaults(ams_config_t *config)
     config->measurement_max_age_ms = 100U;
     config->soc_drift_rest_current_ma = 1000U;
     config->soc_drift_rest_ms = 30000U;
+    config->periodic_can_base_id = AMS_PERIODIC_CAN_DEFAULT_ID;
+    config->periodic_can_frame_count = AMS_PERIODIC_CAN_DEFAULT_FRAMES;
     memcpy(config->soc_drift_points, points, sizeof(points));
 }
 
@@ -79,7 +81,12 @@ uint8_t ams_config_is_valid(const ams_config_t *config)
         config->capacity_mah == 0U || config->current_gain_ua_per_count == 0U ||
         config->voltage_current_persist_ms == 0U ||
         config->temperature_persist_ms == 0U ||
-        config->measurement_max_age_ms == 0U) {
+        config->measurement_max_age_ms == 0U ||
+        config->periodic_can_frame_count < AMS_PERIODIC_CAN_MIN_FRAMES ||
+        config->periodic_can_frame_count > AMS_PERIODIC_CAN_MAX_FRAMES ||
+        config->periodic_can_base_id > 0x7FFU ||
+        (config->periodic_can_frame_count == 2U &&
+         config->periodic_can_base_id >= 0x7FFU)) {
         return 0U;
     }
     for (index = 0U; index < AMS_SOC_DRIFT_POINT_COUNT; index++) {

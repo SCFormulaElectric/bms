@@ -23,6 +23,7 @@ daughterboards.
   setup, CRC-checked address verification and bridge identity verification;
 - CAN AFE bring-up diagnostics with status, failed step, configured/verified
   segment counts and the bridge DEVICE_CONFIG value;
+- configurable one- or two-frame BMS summary on CAN every five seconds;
 - TI-reference-tested BQ796xx command frame and CRC codec;
 - nonblocking SPI/DMA acquisition framework and host tests.
 
@@ -43,3 +44,24 @@ From PowerShell, run tools/build.ps1 for Debug or Release.
 
 The final 128 KiB flash sector is excluded from the application image and
 reserved for the configuration/SOC journal.
+
+## Configuration required before vehicle testing
+
+The values in `Core/Src/Ams/ams_config.c` are safe software defaults, not an
+approved accumulator configuration. Confirm and update the segment/channel
+counts, cell voltage and temperature limits, charge/discharge current limits,
+pack capacity, installed current-sensor channel/polarity/zero/gain, persistence
+times, measurement timeout, rested-current threshold, rest time, initial SOC
+policy and all five voltage/SOC drift points before vehicle testing. The
+3.000 V empty-SOC anchor is a project requirement; the other default drift
+points are placeholders and must be replaced with the selected cell's tested
+rested OCV curve.
+
+For the five-second summary, edit `AMS_PERIODIC_CAN_DEFAULT_ID` and
+`AMS_PERIODIC_CAN_DEFAULT_FRAMES` in `Core/Inc/Ams/ams_config.h`, or update the
+equivalent fields in a validated persisted configuration. The base ID must be
+an 11-bit standard CAN ID. Frame count must be 1 or 2; when it is 2, the second
+frame uses base ID + 1. Select IDs that do not collide with the vehicle DBC.
+See `docs/CAN_PROTOCOL.md` for byte definitions. This configuration addition
+advances the flash-record schema to version 2; version-1 settings are rejected
+and the defaults are used until a version-2 record is saved.

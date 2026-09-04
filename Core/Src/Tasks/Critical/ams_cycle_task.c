@@ -131,6 +131,14 @@ void ams_cycle_task(void *argument)
             data->fan_enable_request =
                 controller.decision.fan_enable_request;
             data->soc_permille = battery.soc_permille;
+            if (measurement.status == AMS_SAMPLE_VALID) {
+                data->pack_voltage_mv = measurement.pack_voltage_mv;
+                data->pack_current_ma = measurement.pack_current_ma;
+                data->minimum_cell_mv = battery.minimum_cell_mv;
+                data->maximum_cell_mv = battery.maximum_cell_mv;
+                data->maximum_temperature_dc =
+                    battery.maximum_temperature_dc;
+            }
             data->first_fault = controller.decision.first_fault;
             taskEXIT_CRITICAL();
 
