@@ -40,10 +40,7 @@ $includeDirectories = @(
     'Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2',
     'Middlewares\Third_Party\FreeRTOS\Source\portable\GCC\ARM_CM4F',
     'Drivers\CMSIS\Device\ST\STM32F4xx\Include',
-    'Drivers\CMSIS\Include',
-    'FATFS\Target',
-    'FATFS\App',
-    'Middlewares\Third_Party\FatFs\src'
+    'Drivers\CMSIS\Include'
 )
 $includeFlags = $includeDirectories | ForEach-Object {
     '-I' + (Join-Path $repoRoot $_)
@@ -61,13 +58,11 @@ if ($Configuration -eq 'Debug') {
     $configurationFlags = @('-Os', '-g0')
 }
 
-$sourceRoots = @('Core', 'Drivers', 'FATFS', 'Middlewares') |
+$sourceRoots = @('Core', 'Drivers', 'Middlewares') |
     ForEach-Object { Join-Path $repoRoot $_ }
 $sources = Get-ChildItem -Path $sourceRoots -Recurse -File |
     Where-Object {
-        $_.Extension -in @('.c', '.s') -and
-        $_.FullName -notlike '*\Middlewares\Third_Party\FatFs\*' -and
-        $_.FullName -notlike '*\FATFS\*'
+        $_.Extension -in @('.c', '.s')
     } |
     Sort-Object FullName
 
@@ -80,7 +75,7 @@ try {
         New-Item -ItemType Directory -Force -Path (Split-Path $objectPath) |
             Out-Null
         # Project-owned application code is held to warnings-as-errors. ST,
-        # FreeRTOS, and FatFs sources retain visible upstream warnings without
+        # and FreeRTOS sources retain visible upstream warnings without
         # requiring local edits to generated/vendor code.
         $ownershipFlags = if ($relative.StartsWith('Core\')) {
             @('-Werror')

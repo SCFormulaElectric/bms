@@ -55,15 +55,11 @@ CAN_HandleTypeDef hcan1;
 
 IWDG_HandleTypeDef hiwdg;
 
-SD_HandleTypeDef hsd;
-
 SPI_HandleTypeDef hspi1;
 DMA_HandleTypeDef hdma_spi1_rx;
 DMA_HandleTypeDef hdma_spi1_tx;
 
 TIM_HandleTypeDef htim2;
-
-PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 /* Definitions for defaultTask */
 // osThreadId_t defaultTaskHandle;
