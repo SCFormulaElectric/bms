@@ -34,6 +34,12 @@ limits, latches faults, updates charge/discharge/fan outputs, and then publishes
 the watchdog heartbeat. CAN transmission is diagnostic and cannot hold up this
 path.
 
+A separate low-priority CAN configuration task accepts only the dedicated VCU
+telemetry command ID. It stages, validates, commits, reads back, and optionally
+persists summary layouts. This task cannot write AMS limits, clear faults, or
+drive charge/discharge outputs, and it is excluded from the watchdog-proven
+safety path.
+
 Positive pack current means discharge; negative means charge. The polarity
 configuration is applied before coulomb counting and current-limit checks.
 

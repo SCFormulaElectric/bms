@@ -138,6 +138,9 @@ void ams_cycle_task(void *argument)
                 data->maximum_cell_mv = battery.maximum_cell_mv;
                 data->maximum_temperature_dc =
                     battery.maximum_temperature_dc;
+                data->valid_cell_count = measurement.valid_cell_count;
+                data->valid_temperature_count =
+                    measurement.valid_temperature_count;
             }
             data->first_fault = controller.decision.first_fault;
             taskEXIT_CRITICAL();

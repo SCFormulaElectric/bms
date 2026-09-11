@@ -5,6 +5,10 @@
 int main(void)
 {
     assert((CAN_BMS_BASE_ID & 0x0FFU) == 0U);
+    assert(BMS_CAN_COMMAND_ID == 0x5E0U);
+    assert(BMS_CAN_CONFIG_RESPONSE_ID == 0x6E0U);
+    assert(BMS_CAN_SUMMARY_BASE_ID == 0x6F0U);
+    assert(BMS_CAN_SUMMARY_MAX_FRAMES == 16U);
     assert(CAN_ID_AMS_HEARTBEAT == CAN_BMS_BASE_ID + 0x00U);
     assert(CAN_ID_AMS_PACK_STATUS == CAN_BMS_BASE_ID + 0x01U);
     assert(CAN_ID_AMS_CELL_GROUP_BASE == CAN_BMS_BASE_ID + 0x10U);

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "Ams/ams_config.h"
+#include "Peripherals/bms_summary_config.h"
 
 typedef enum {
     AMS_PERSISTENCE_OK = 0,
@@ -15,9 +16,10 @@ typedef enum {
 /* Sector 11 is reserved by the linker. Writes erase/program internal flash and
  * must only be requested while both charge and discharge outputs are off. */
 ams_persistence_status_t ams_persistence_load(ams_config_t *config,
-    uint16_t *soc_permille, uint32_t *sequence);
+    bms_summary_config_t *summary_config, uint16_t *soc_permille,
+    uint32_t *sequence);
 ams_persistence_status_t ams_persistence_save(const ams_config_t *config,
-    uint16_t soc_permille, uint8_t discharge_output_active,
-    uint8_t charge_output_active);
+    const bms_summary_config_t *summary_config, uint16_t soc_permille,
+    uint8_t discharge_output_active, uint8_t charge_output_active);
 
 #endif /* AMS_PERSISTENCE_H */

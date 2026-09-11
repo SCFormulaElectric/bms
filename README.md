@@ -21,8 +21,8 @@ daughterboards.
 - complete early-boot BQ79600/BQ79616 forward bring-up: dual GPIO wake,
   stack wake, write/read DLL synchronization, auto-addressing, top-of-stack
   setup, CRC-checked address verification and bridge identity verification;
-- one configurable `0xNXX` CAN namespace with independent enable bits for
-  every detailed, rotating and five-second summary message;
+- one configurable `0xNXX` CAN namespace, optional fast telemetry, and 0-16
+  runtime-configurable five-second summary frames controlled by the VCU;
 - TI-reference-tested BQ796xx command frame and CRC codec;
 - nonblocking SPI/DMA acquisition framework and host tests.
 
@@ -56,14 +56,13 @@ policy and all five voltage/SOC drift points before vehicle testing. The
 points are placeholders and must be replaced with the selected cell's tested
 rested OCV curve.
 
-For CAN output, edit only `CAN_BMS_BASE_ID` and
-`CAN_BMS_ENABLED_MESSAGES` in `Core/Inc/Peripherals/can_protocol.h`. The base
-selects one aligned `0xNXX` namespace and every message uses a documented
-subitem offset. The enable mask permits zero, one, several or all message
-types. The default sends only the two five-second summary frames. Select a
-namespace that does not collide with the vehicle DBC and see
-`docs/CAN_PROTOCOL.md` for every ID and byte definition.
+For CAN output, `CAN_BMS_BASE_ID` selects one aligned `0xNXX` namespace and
+`CAN_BMS_ENABLED_MESSAGES` controls optional fast diagnostics. The VCU serial
+console configures the number and field order of five-second summaries through
+staged CAN transactions. The default remains the two legacy summary frames.
+Select a namespace that does not collide with the vehicle DBC and see
+`docs/CAN_PROTOCOL.md` for every ID, command, and byte definition.
 
-Removing the old persisted CAN-ID fields advances the flash-record schema to
-version 3. Older settings are rejected and defaults are used until a version-3
-record is saved.
+The flash-record schema is version 4 so it can store the summary layout.
+Version 3 AMS calibration and SOC records remain readable and use the default
+two-frame layout until a version 4 record is saved.

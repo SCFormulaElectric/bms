@@ -10,17 +10,20 @@
 #include "FreeRTOS.h"
 #include "main.h"
 #include "Peripherals/can_bus.h"
+#include "Peripherals/bms_summary_config.h"
 #include "event_groups.h"
 #include "queue.h"
 #include "task.h"
 
-#define NUM_TASKS              4U
+#define NUM_TASKS              5U
 #define AMS_CYCLE_PRIO         16U
 #define IWDG_PRIO              16U
 #define CAN_PRIO               10U
+#define BMS_CONFIG_PRIO         8U
 #define BMS_SUMMARY_PRIO        4U
 
 #define CAN_QUEUE_LENGTH       16U
+#define CAN_RX_QUEUE_LENGTH    16U
 #define LOG_MSG_MAX_LEN        128U
 #define LOG_QUEUE_LENGTH       64U
 #define KILOBYTE               256U
@@ -54,8 +57,11 @@ typedef struct app_data_s {
     volatile uint16_t minimum_cell_mv;
     volatile uint16_t maximum_cell_mv;
     volatile int16_t maximum_temperature_dc;
+    volatile uint16_t valid_cell_count;
+    volatile uint16_t valid_temperature_count;
     volatile uint8_t boot_healthy;
     ams_config_t config;
+    bms_summary_config_t summary_config;
     uint16_t initial_soc_permille;
     volatile uint8_t afe_bringup_status;
     volatile uint8_t afe_bringup_failed_step;

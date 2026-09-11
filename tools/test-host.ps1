@@ -14,6 +14,11 @@ $tests = @(
         Sources = @('tests\host\test_can_protocol.c')
     },
     @{
+        Name = 'bms_summary_config'
+        Sources = @('tests\host\test_bms_summary_config.c',
+            'Core\Src\Peripherals\bms_summary_config.c')
+    },
+    @{
         Name = 'ams_controller'
         Sources = @('tests\host\test_ams_controller.c',
             'Core\Src\Ams\ams_controller.c', 'Core\Src\Ams\ams_config.c')

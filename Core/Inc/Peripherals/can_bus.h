@@ -14,11 +14,22 @@ typedef struct {
 } can_tx_message_t;
 
 typedef struct {
+    uint32_t id;
+    uint8_t dlc;
+    uint8_t data[8];
+} can_rx_message_t;
+
+typedef struct {
     CAN_HandleTypeDef *hcan;
     QueueHandle_t can_tx_queue;
+    QueueHandle_t can_rx_queue;
     TaskHandle_t tx_task_handle;
+    TaskHandle_t rx_task_handle;
     volatile uint32_t tx_errors;
     volatile uint32_t bus_off_count;
+    volatile uint32_t rx_dropped;
+    volatile uint32_t rx_rejected;
+    volatile uint32_t rx_malformed;
     volatile uint8_t tx_fault_latched;
 } can_bus_t;
 

@@ -1,8 +1,9 @@
 # BMS CAN telemetry
 
 Bus speed is 500 kbit/s. Frames use standard 11-bit identifiers and
-little-endian multibyte fields. Incoming CAN is diagnostic-only and cannot
-directly command a safety output.
+little-endian multibyte fields. Incoming CAN accepts only the VCU
+telemetry-configuration command ID. These commands cannot change AMS
+thresholds, clear faults, or directly command a safety output.
 
 ## One BMS namespace
 
@@ -30,17 +31,19 @@ Each message then adds its fixed subitem offset:
 | `0x06` | `0x606` | `CAN_BMS_MSG_AFE_STATUS` | 100 ms | bring-up status u8, failed step u8, configured/verified segments u8/u8, BQ79600 DEVICE_CONFIG u8, reserved u8[3] |
 | `0x10+` | `0x610+` | `CAN_BMS_MSG_CELL_GROUPS` | rotating at 100 ms | four cell voltages in mV u16[4] |
 | `0x40+` | `0x640+` | `CAN_BMS_MSG_TEMP_GROUPS` | rotating at 100 ms | four temperatures in 0.1 C i16[4] |
-| `0xF0` | `0x6F0` | `CAN_BMS_MSG_SUMMARY_PRIMARY` | 5 s | summary frame 1 |
-| `0xF1` | `0x6F1` | `CAN_BMS_MSG_SUMMARY_SECONDARY` | 5 s | summary frame 2 |
+| `0xD0-0xDF` | `0x6D0-0x6DF` | runtime layout readback | on request | slot descriptor |
+| `0xE0` | `0x6E0` | runtime configuration response | on request | ACK/NACK and layout metadata |
+| `0xF0-0xFF` | `0x6F0-0x6FF` | runtime summary slots | 5 s | 0-16 configured summary frames |
 
-## Selecting how many messages are sent
+## Selecting fast telemetry
 
-Edit `CAN_BMS_ENABLED_MESSAGES` in the same `can_protocol.h` file. The default
-enables only the two five-second summary frames:
+Edit `CAN_BMS_ENABLED_MESSAGES` in the same `can_protocol.h` file to control
+the optional 100 ms diagnostic telemetry. Five-second summaries are controlled
+at runtime and default to the two legacy frames. Fast telemetry is disabled by
+default:
 
 ```c
-#define CAN_BMS_ENABLED_MESSAGES \
-    (CAN_BMS_MSG_SUMMARY_PRIMARY | CAN_BMS_MSG_SUMMARY_SECONDARY)
+#define CAN_BMS_ENABLED_MESSAGES 0UL
 ```
 
 Examples:
@@ -56,14 +59,37 @@ Examples:
 /* Every available BMS message */
 #define CAN_BMS_ENABLED_MESSAGES CAN_BMS_MSG_ALL
 
-/* No BMS telemetry */
+/* No fast telemetry */
 #define CAN_BMS_ENABLED_MESSAGES 0UL
 ```
 
 The compiler rejects an unaligned base, a namespace outside the 11-bit CAN
 range, or unknown enable bits.
 
-## Five-second summary payloads
+## Runtime summary configuration
+
+The VCU sends versioned, eight-byte command frames on `0x5E0`. The BMS accepts
+read configuration, read slot, begin transaction, set count, set slot,
+validate, commit, save, and abort operations. Edits use a staging copy. An
+invalid or incomplete layout is rejected and never replaces the active layout.
+
+Each slot descriptor contains up to eight four-bit signal IDs. Signal widths
+and scaling are fixed by `bms_can_protocol.h`; the encoded widths in a slot
+must total no more than eight bytes. The active count is bounded to 0-16 and
+maps directly to `0x6F0` through `0x6FF`. The period is fixed at 5000 ms in
+protocol version 1.
+
+`COMMIT` changes runtime telemetry atomically. `SAVE` stores the committed
+layout and is rejected while charge or discharge output is active. Persistence
+record version 4 can load version 3 AMS calibration data and supplies the
+default two-slot layout for that legacy record.
+
+Responses on `0x6E0` contain version, echoed opcode, transaction ID, result,
+active generation, active count, and period in 100 ms units. Layout readbacks
+on `0x6D0 + slot` contain version, transaction, generation, slot, and the
+packed descriptor.
+
+## Default five-second summary payloads
 
 Summary frame 1, offset `0xF0`, DLC 8:
 

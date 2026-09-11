@@ -1,12 +1,14 @@
 #ifndef CAN_PROTOCOL_H
 #define CAN_PROTOCOL_H
 
+#include "Peripherals/bms_can_protocol.h"
+
 #define CAN_BUS_BITRATE_BPS                  500000U
 #define CAN_AMS_TELEMETRY_PERIOD_MS             100U
 
 /* Edit this one value to move the complete BMS namespace. Its low byte must
  * remain 0 so every generated identifier shares the same 0xNXX prefix. */
-#define CAN_BMS_BASE_ID                       0x600U
+#define CAN_BMS_BASE_ID                       BMS_CAN_BASE_ID
 
 /* Add or remove names from this mask to choose exactly what is transmitted. */
 #define CAN_BMS_MSG_HEARTBEAT             (1UL << 0)
@@ -21,10 +23,9 @@
 #define CAN_BMS_MSG_SUMMARY_PRIMARY       (1UL << 9)
 #define CAN_BMS_MSG_SUMMARY_SECONDARY    (1UL << 10)
 
-/* Default: only the two five-second summary frames. An empty mask disables
- * all BMS telemetry without changing the generic CAN transmitter task. */
-#define CAN_BMS_ENABLED_MESSAGES \
-    (CAN_BMS_MSG_SUMMARY_PRIMARY | CAN_BMS_MSG_SUMMARY_SECONDARY)
+/* Optional 100 ms diagnostic telemetry is disabled by default. Runtime
+ * five-second summaries are configured independently. */
+#define CAN_BMS_ENABLED_MESSAGES             0UL
 
 #define CAN_BMS_MSG_ALL \
     (CAN_BMS_MSG_HEARTBEAT | CAN_BMS_MSG_PACK_STATUS | \

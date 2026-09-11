@@ -8,6 +8,8 @@ app_data_t app = {0};
 
 static StaticQueue_t can_tx_queue_storage;
 static uint8_t can_tx_items[CAN_QUEUE_LENGTH * sizeof(can_tx_message_t)];
+static StaticQueue_t can_rx_queue_storage;
+static uint8_t can_rx_items[CAN_RX_QUEUE_LENGTH * sizeof(can_rx_message_t)];
 static EventGroupHandle_t watchdog_events;
 
 void create_app(void)
@@ -21,6 +23,9 @@ void create_app(void)
     app.can_bus.can_tx_queue = xQueueCreateStatic(CAN_QUEUE_LENGTH,
         sizeof(can_tx_message_t), can_tx_items, &can_tx_queue_storage);
     configASSERT(app.can_bus.can_tx_queue != NULL);
+    app.can_bus.can_rx_queue = xQueueCreateStatic(CAN_RX_QUEUE_LENGTH,
+        sizeof(can_rx_message_t), can_rx_items, &can_rx_queue_storage);
+    configASSERT(app.can_bus.can_rx_queue != NULL);
 
     watchdog_events = xEventGroupCreate();
     configASSERT(watchdog_events != NULL);
@@ -29,6 +34,7 @@ void create_app(void)
     app.task_entries[ams_cycle_task_index] = create_ams_cycle_task(&app);
     app.task_entries[can_transmitter_task_index] =
         create_can_transmitter_task(&app);
+    app.task_entries[bms_config_task_index] = create_bms_config_task(&app);
     app.task_entries[bms_summary_task_index] = create_bms_summary_task(&app);
     app.task_entries[independent_watchdog_task_index] =
         create_independent_watchdog_task(&app);

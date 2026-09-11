@@ -26,6 +26,8 @@
 #include "Peripherals/adc.h"
 #include "Ams/ams_config.h"
 #include "Ams/ams_persistence.h"
+#include "Peripherals/bms_summary_config.h"
+#include "Tasks/CAN/bms_config_task.h"
 #include "Ams/bq79600_bridge.h"
 #include "Peripherals/can_bus.h"
 #include "Peripherals/digital_pins.h"
@@ -133,8 +135,10 @@ int main(void)
     /* Topology is required by auto-addressing, so load the persisted runtime
      * configuration before bringing the daisy chain online. */
     ams_config_load_defaults(&app.config);
+    bms_summary_config_load_defaults(&app.summary_config);
     app.initial_soc_permille = 500U;
-    (void)ams_persistence_load(&app.config, &app.initial_soc_permille, NULL);
+    (void)ams_persistence_load(&app.config, &app.summary_config,
+        &app.initial_soc_permille, NULL);
     (void)bq79600_stack_bringup(&hspi1, app.config.segment_count, &bringup);
     app.afe_bringup_status = (uint8_t)bringup.status;
     app.afe_bringup_failed_step = (uint8_t)bringup.failed_step;
@@ -180,7 +184,10 @@ int main(void)
   create_app();
   /* CAN is diagnostic-only at this stage. Incoming frames are not accepted as
    * safety-authoritative inputs. */
-  if (HAL_CAN_Start(&hcan1) != HAL_OK)
+  if (bms_can_configure_rx_filter(&hcan1) != HAL_OK ||
+      HAL_CAN_Start(&hcan1) != HAL_OK ||
+      HAL_CAN_ActivateNotification(&hcan1,
+          CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_ERROR | CAN_IT_BUSOFF) != HAL_OK)
   {
     Error_Handler();
   }
