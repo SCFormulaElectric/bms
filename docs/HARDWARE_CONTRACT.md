@@ -27,8 +27,9 @@
 - non-programmable AMS/IMD latch and manual-reset behavior;
 - oscilloscope verification of the implemented BQ79600 GPIO/stack wake timing,
   5.25 MHz SPI traffic and SPI_RDY behavior on this layout;
-- confirmation that CAN frame 0x506 reports status 0, equal configured and
-  verified segment counts, and bridge DEVICE_CONFIG 0x14;
+- with `CAN_BMS_MSG_AFE_STATUS` enabled, confirmation that CAN ID
+  `CAN_BMS_BASE_ID + 0x06` reports status 0, equal configured and verified
+  segment counts, and bridge DEVICE_CONFIG 0x14;
 - BQ79616 measurement setup, open-wire diagnostics, protector configuration
   and conversion timing verified against physical hardware;
 - balancing resistor thermal characterization and proof that balancing stops

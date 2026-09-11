@@ -21,9 +21,8 @@ daughterboards.
 - complete early-boot BQ79600/BQ79616 forward bring-up: dual GPIO wake,
   stack wake, write/read DLL synchronization, auto-addressing, top-of-stack
   setup, CRC-checked address verification and bridge identity verification;
-- CAN AFE bring-up diagnostics with status, failed step, configured/verified
-  segment counts and the bridge DEVICE_CONFIG value;
-- configurable one- or two-frame BMS summary on CAN every five seconds;
+- one configurable `0xNXX` CAN namespace with independent enable bits for
+  every detailed, rotating and five-second summary message;
 - TI-reference-tested BQ796xx command frame and CRC codec;
 - nonblocking SPI/DMA acquisition framework and host tests.
 
@@ -57,11 +56,14 @@ policy and all five voltage/SOC drift points before vehicle testing. The
 points are placeholders and must be replaced with the selected cell's tested
 rested OCV curve.
 
-For the five-second summary, edit `AMS_PERIODIC_CAN_DEFAULT_ID` and
-`AMS_PERIODIC_CAN_DEFAULT_FRAMES` in `Core/Inc/Ams/ams_config.h`, or update the
-equivalent fields in a validated persisted configuration. The base ID must be
-an 11-bit standard CAN ID. Frame count must be 1 or 2; when it is 2, the second
-frame uses base ID + 1. Select IDs that do not collide with the vehicle DBC.
-See `docs/CAN_PROTOCOL.md` for byte definitions. This configuration addition
-advances the flash-record schema to version 2; version-1 settings are rejected
-and the defaults are used until a version-2 record is saved.
+For CAN output, edit only `CAN_BMS_BASE_ID` and
+`CAN_BMS_ENABLED_MESSAGES` in `Core/Inc/Peripherals/can_protocol.h`. The base
+selects one aligned `0xNXX` namespace and every message uses a documented
+subitem offset. The enable mask permits zero, one, several or all message
+types. The default sends only the two five-second summary frames. Select a
+namespace that does not collide with the vehicle DBC and see
+`docs/CAN_PROTOCOL.md` for every ID and byte definition.
+
+Removing the old persisted CAN-ID fields advances the flash-record schema to
+version 3. Older settings are rejected and defaults are used until a version-3
+record is saved.

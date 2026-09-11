@@ -2,6 +2,8 @@
 
 #include <limits.h>
 
+#include "Peripherals/can_protocol.h"
+
 typedef struct {
     ams_state_t state;
     uint16_t soc_permille;
@@ -97,11 +99,12 @@ void bms_summary_task(void *argument)
 
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(BMS_SUMMARY_PERIOD_MS));
         capture_snapshot(data, &snapshot);
-        queue_primary(&data->can_bus, data->config.periodic_can_base_id,
-            &snapshot);
-        if (data->config.periodic_can_frame_count == 2U) {
-            queue_secondary(&data->can_bus,
-                (uint16_t)(data->config.periodic_can_base_id + 1U),
+        if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_SUMMARY_PRIMARY)) {
+            queue_primary(&data->can_bus, CAN_ID_AMS_SUMMARY_PRIMARY,
+                &snapshot);
+        }
+        if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_SUMMARY_SECONDARY)) {
+            queue_secondary(&data->can_bus, CAN_ID_AMS_SUMMARY_SECONDARY,
                 &snapshot);
         }
     }

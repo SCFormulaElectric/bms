@@ -51,58 +51,72 @@ void ams_can_publish_snapshot(can_bus_t *bus, ams_can_cursor_t *cursor,
         return;
     }
 
-    payload[0] = (uint8_t)decision->state;
-    payload[1] = cursor->rolling_counter++;
-    put_u16(&payload[2], battery->soc_permille);
-    put_u32(&payload[4], measurement->timestamp_ms);
-    send_frame(bus, CAN_ID_AMS_HEARTBEAT, payload);
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_HEARTBEAT)) {
+        payload[0] = (uint8_t)decision->state;
+        payload[1] = cursor->rolling_counter++;
+        put_u16(&payload[2], battery->soc_permille);
+        put_u32(&payload[4], measurement->timestamp_ms);
+        send_frame(bus, CAN_ID_AMS_HEARTBEAT, payload);
+    }
 
-    put_u32(&payload[0], (uint32_t)measurement->pack_voltage_mv);
-    put_u32(&payload[4], (uint32_t)measurement->pack_current_ma);
-    send_frame(bus, CAN_ID_AMS_PACK_STATUS, payload);
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_PACK_STATUS)) {
+        put_u32(&payload[0], (uint32_t)measurement->pack_voltage_mv);
+        put_u32(&payload[4], (uint32_t)measurement->pack_current_ma);
+        send_frame(bus, CAN_ID_AMS_PACK_STATUS, payload);
+    }
 
-    put_u16(&payload[0], battery->minimum_cell_mv);
-    put_u16(&payload[2], battery->maximum_cell_mv);
-    payload[4] = (uint8_t)battery->minimum_cell_index;
-    payload[5] = (uint8_t)battery->maximum_cell_index;
-    put_u16(&payload[6], battery->soc_permille);
-    send_frame(bus, CAN_ID_AMS_CELL_EXTREMA, payload);
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_CELL_EXTREMA)) {
+        put_u16(&payload[0], battery->minimum_cell_mv);
+        put_u16(&payload[2], battery->maximum_cell_mv);
+        payload[4] = (uint8_t)battery->minimum_cell_index;
+        payload[5] = (uint8_t)battery->maximum_cell_index;
+        put_u16(&payload[6], battery->soc_permille);
+        send_frame(bus, CAN_ID_AMS_CELL_EXTREMA, payload);
+    }
 
-    put_u16(&payload[0], (uint16_t)battery->minimum_temperature_dc);
-    put_u16(&payload[2], (uint16_t)battery->maximum_temperature_dc);
-    put_u16(&payload[4], measurement->valid_temperature_count);
-    put_u16(&payload[6], measurement->valid_cell_count);
-    send_frame(bus, CAN_ID_AMS_TEMPERATURES, payload);
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_TEMPERATURES)) {
+        put_u16(&payload[0], (uint16_t)battery->minimum_temperature_dc);
+        put_u16(&payload[2], (uint16_t)battery->maximum_temperature_dc);
+        put_u16(&payload[4], measurement->valid_temperature_count);
+        put_u16(&payload[6], measurement->valid_cell_count);
+        send_frame(bus, CAN_ID_AMS_TEMPERATURES, payload);
+    }
 
-    put_u32(&payload[0], decision->active_faults);
-    put_u32(&payload[4], decision->latched_faults);
-    send_frame(bus, CAN_ID_AMS_FAULTS, payload);
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_FAULTS)) {
+        put_u32(&payload[0], decision->active_faults);
+        put_u32(&payload[4], decision->latched_faults);
+        send_frame(bus, CAN_ID_AMS_FAULTS, payload);
+    }
 
-    memset(payload, 0, sizeof(payload));
-    payload[0] = (uint8_t)(decision->discharge_enable_request |
-        (decision->charge_enable_request << 1) |
-        (decision->fan_enable_request << 2) |
-        (battery->empty_anchor_active << 3) |
-        (battery->full_anchor_active << 4));
-    payload[1] = (uint8_t)config->current_sensor_polarity;
-    put_u16(&payload[2],
-        (uint16_t)(config->discharge_current_limit_ma / 1000U));
-    put_u16(&payload[4],
-        (uint16_t)(config->charge_current_limit_ma / 1000U));
-    payload[6] = config->segment_count;
-    payload[7] = config->cells_per_segment;
-    send_frame(bus, CAN_ID_AMS_OUTPUTS_LIMITS, payload);
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_OUTPUTS_LIMITS)) {
+        memset(payload, 0, sizeof(payload));
+        payload[0] = (uint8_t)(decision->discharge_enable_request |
+            (decision->charge_enable_request << 1) |
+            (decision->fan_enable_request << 2) |
+            (battery->empty_anchor_active << 3) |
+            (battery->full_anchor_active << 4));
+        payload[1] = (uint8_t)config->current_sensor_polarity;
+        put_u16(&payload[2],
+            (uint16_t)(config->discharge_current_limit_ma / 1000U));
+        put_u16(&payload[4],
+            (uint16_t)(config->charge_current_limit_ma / 1000U));
+        payload[6] = config->segment_count;
+        payload[7] = config->cells_per_segment;
+        send_frame(bus, CAN_ID_AMS_OUTPUTS_LIMITS, payload);
+    }
 
-    memset(payload, 0, sizeof(payload));
-    payload[0] = afe_bringup_status;
-    payload[1] = afe_bringup_failed_step;
-    payload[2] = config->segment_count;
-    payload[3] = afe_verified_devices;
-    payload[4] = afe_bridge_device_config;
-    send_frame(bus, CAN_ID_AMS_AFE_STATUS, payload);
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_AFE_STATUS)) {
+        memset(payload, 0, sizeof(payload));
+        payload[0] = afe_bringup_status;
+        payload[1] = afe_bringup_failed_step;
+        payload[2] = config->segment_count;
+        payload[3] = afe_verified_devices;
+        payload[4] = afe_bridge_device_config;
+        send_frame(bus, CAN_ID_AMS_AFE_STATUS, payload);
+    }
 
     count = measurement->valid_cell_count;
-    if (count != 0U) {
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_CELL_GROUPS) && count != 0U) {
         if (cursor->next_cell >= count) {
             cursor->next_cell = 0U;
         }
@@ -119,7 +133,7 @@ void ams_can_publish_snapshot(can_bus_t *bus, ams_can_cursor_t *cursor,
     }
 
     count = measurement->valid_temperature_count;
-    if (count != 0U) {
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_TEMP_GROUPS) && count != 0U) {
         if (cursor->next_temperature >= count) {
             cursor->next_temperature = 0U;
         }

@@ -142,7 +142,8 @@ void ams_cycle_task(void *argument)
             data->first_fault = controller.decision.first_fault;
             taskEXIT_CRITICAL();
 
-            if ((uint32_t)(now_ms - last_telemetry_ms) >=
+            if (CAN_BMS_FAST_TELEMETRY_ENABLED &&
+                (uint32_t)(now_ms - last_telemetry_ms) >=
                     CAN_AMS_TELEMETRY_PERIOD_MS) {
                 ams_can_publish_snapshot(&data->can_bus, &can_cursor, config,
                     &measurement, &battery, &controller.decision,

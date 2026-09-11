@@ -10,6 +10,10 @@ $tests = @(
             'Core\Src\Ams\ams_config.c')
     },
     @{
+        Name = 'can_protocol'
+        Sources = @('tests\host\test_can_protocol.c')
+    },
+    @{
         Name = 'ams_controller'
         Sources = @('tests\host\test_ams_controller.c',
             'Core\Src\Ams\ams_controller.c', 'Core\Src\Ams\ams_config.c')

@@ -22,8 +22,9 @@ back every address and the BQ79600 DEVICE_CONFIG register with CRC validation.
 
 Any transport, CRC, addressing or identity failure records an exact status and
 failed step, latches the AFE communication fault, and leaves safety outputs off.
-CAN frame 0x506 reports the status, step, configured segment count, verified
-segment count and bridge DEVICE_CONFIG value for bring-up troubleshooting.
+When `CAN_BMS_MSG_AFE_STATUS` is enabled, CAN offset `base + 0x06` reports the
+status, step, configured segment count, verified segment count and bridge
+DEVICE_CONFIG value for bring-up troubleshooting.
 
 ## Critical cycle
 
