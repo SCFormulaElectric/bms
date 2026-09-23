@@ -1,6 +1,7 @@
 #ifndef BMS_CAN_PROTOCOL_H
 #define BMS_CAN_PROTOCOL_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define BMS_CAN_PROTOCOL_VERSION                 1U
@@ -19,6 +20,7 @@
 typedef enum {
     BMS_CAN_CMD_READ_CONFIG = 0x01,
     BMS_CAN_CMD_READ_SLOT = 0x02,
+    BMS_CAN_CMD_CLEAR_FAULTS = 0x03,
     BMS_CAN_CMD_BEGIN = 0x10,
     BMS_CAN_CMD_SET_COUNT = 0x11,
     BMS_CAN_CMD_SET_SLOT = 0x12,
@@ -36,8 +38,34 @@ typedef enum {
     BMS_CAN_STATUS_BAD_VALUE,
     BMS_CAN_STATUS_NO_TRANSACTION,
     BMS_CAN_STATUS_PERSISTENCE_BLOCKED,
-    BMS_CAN_STATUS_PERSISTENCE_ERROR
+    BMS_CAN_STATUS_PERSISTENCE_ERROR,
+    BMS_CAN_STATUS_BUSY
 } bms_can_status_t;
+
+static inline bms_can_status_t bms_can_validate_clear_faults_request(
+    const uint8_t data[BMS_CAN_FRAME_DLC])
+{
+    uint8_t index;
+
+    if (data == NULL) {
+        return BMS_CAN_STATUS_BAD_VALUE;
+    }
+    if (data[0] != BMS_CAN_PROTOCOL_VERSION) {
+        return BMS_CAN_STATUS_BAD_VERSION;
+    }
+    if (data[1] != BMS_CAN_CMD_CLEAR_FAULTS) {
+        return BMS_CAN_STATUS_BAD_OPCODE;
+    }
+    if (data[2] == 0U) {
+        return BMS_CAN_STATUS_BAD_TRANSACTION;
+    }
+    for (index = 3U; index < BMS_CAN_FRAME_DLC; index++) {
+        if (data[index] != 0U) {
+            return BMS_CAN_STATUS_BAD_VALUE;
+        }
+    }
+    return BMS_CAN_STATUS_OK;
+}
 
 /* Signal IDs occupy four bits in a slot descriptor. Zero terminates a slot. */
 typedef enum {

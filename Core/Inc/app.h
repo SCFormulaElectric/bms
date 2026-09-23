@@ -51,6 +51,7 @@ typedef struct app_data_s {
     volatile uint8_t discharge_enable_request;
     volatile uint8_t charge_enable_request;
     volatile uint8_t fan_enable_request;
+    volatile uint8_t fault_clear_requested;
     volatile uint16_t soc_permille;
     volatile int32_t pack_voltage_mv;
     volatile int32_t pack_current_ma;

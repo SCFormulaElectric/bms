@@ -4,12 +4,18 @@
 #include <string.h>
 
 static uint8_t persistence_elapsed(uint8_t *active, uint32_t *since,
-    uint8_t violation, uint32_t now_ms, uint32_t duration_ms)
+    uint8_t violation, uint32_t now_ms, uint32_t duration_ms,
+    uint8_t force_current_violation)
 {
     if (violation == 0U) {
         *active = 0U;
         *since = 0U;
         return 0U;
+    }
+    if (force_current_violation != 0U) {
+        *active = 1U;
+        *since = now_ms;
+        return 1U;
     }
     if (*active == 0U) {
         *active = 1U;
@@ -47,6 +53,20 @@ void ams_controller_initialize(ams_controller_t *controller,
     controller->decision.state = AMS_STATE_INIT;
 }
 
+void ams_controller_clear_faults(ams_controller_t *controller)
+{
+    ams_config_t config;
+
+    if (controller == NULL) {
+        return;
+    }
+    config = controller->config;
+    memset(controller, 0, sizeof(*controller));
+    controller->config = config;
+    controller->decision.state = AMS_STATE_INIT;
+    controller->fault_clear_validation_pending = 1U;
+}
+
 void ams_controller_step(ams_controller_t *controller,
     const ams_measurement_t *measurement, uint32_t immediate_faults,
     uint32_t now_ms)
@@ -57,10 +77,13 @@ void ams_controller_step(ams_controller_t *controller,
     uint16_t expected_temperatures;
     uint8_t discharge_allowed = 1U;
     uint8_t charge_allowed = 1U;
+    uint8_t force_current_violations;
 
     if (controller == NULL) {
         return;
     }
+    force_current_violations = controller->fault_clear_validation_pending;
+    controller->fault_clear_validation_pending = 0U;
     controller->decision.discharge_enable_request = 0U;
     controller->decision.charge_enable_request = 0U;
     controller->decision.fan_enable_request = 0U;
@@ -94,7 +117,8 @@ void ams_controller_step(ams_controller_t *controller,
             if (persistence_elapsed(&controller->voltage_high_active[index],
                 &controller->voltage_high_since[index],
                 (voltage > controller->config.cell_overvoltage_mv) ? 1U : 0U,
-                now_ms, controller->config.voltage_current_persist_ms) != 0U) {
+                now_ms, controller->config.voltage_current_persist_ms,
+                force_current_violations) != 0U) {
                 faults |= AMS_FAULT_CELL_OVERVOLTAGE;
                 record_first_fault(&controller->decision,
                     AMS_FAULT_CELL_OVERVOLTAGE, now_ms, voltage,
@@ -103,7 +127,8 @@ void ams_controller_step(ams_controller_t *controller,
             if (persistence_elapsed(&controller->voltage_low_active[index],
                 &controller->voltage_low_since[index],
                 (voltage < controller->config.cell_undervoltage_mv) ? 1U : 0U,
-                now_ms, controller->config.voltage_current_persist_ms) != 0U) {
+                now_ms, controller->config.voltage_current_persist_ms,
+                force_current_violations) != 0U) {
                 faults |= AMS_FAULT_CELL_UNDERVOLTAGE;
                 record_first_fault(&controller->decision,
                     AMS_FAULT_CELL_UNDERVOLTAGE, now_ms, voltage,
@@ -124,7 +149,8 @@ void ams_controller_step(ams_controller_t *controller,
                 &controller->temperature_high_since[index],
                 (temperature > controller->config.cell_max_temperature_dc) ?
                     1U : 0U, now_ms,
-                controller->config.temperature_persist_ms) != 0U) {
+                controller->config.temperature_persist_ms,
+                force_current_violations) != 0U) {
                 faults |= AMS_FAULT_OVERTEMPERATURE;
                 record_first_fault(&controller->decision,
                     AMS_FAULT_OVERTEMPERATURE, now_ms, temperature,
@@ -136,7 +162,8 @@ void ams_controller_step(ams_controller_t *controller,
                 &controller->temperature_low_since[index],
                 (temperature < controller->config.cell_min_temperature_dc) ?
                     1U : 0U, now_ms,
-                controller->config.temperature_persist_ms) != 0U) {
+                controller->config.temperature_persist_ms,
+                force_current_violations) != 0U) {
                 faults |= AMS_FAULT_UNDERTEMPERATURE;
                 record_first_fault(&controller->decision,
                     AMS_FAULT_UNDERTEMPERATURE, now_ms, temperature,
@@ -154,7 +181,8 @@ void ams_controller_step(ams_controller_t *controller,
             (measurement->pack_current_ma >
                 (int32_t)controller->config.discharge_current_limit_ma) ?
                 1U : 0U, now_ms,
-            controller->config.voltage_current_persist_ms) != 0U) {
+            controller->config.voltage_current_persist_ms,
+            force_current_violations) != 0U) {
             faults |= AMS_FAULT_DISCHARGE_OVERCURRENT;
             record_first_fault(&controller->decision,
                 AMS_FAULT_DISCHARGE_OVERCURRENT, now_ms,
@@ -167,7 +195,8 @@ void ams_controller_step(ams_controller_t *controller,
             (measurement->pack_current_ma <
                 -(int32_t)controller->config.charge_current_limit_ma) ?
                 1U : 0U, now_ms,
-            controller->config.voltage_current_persist_ms) != 0U) {
+            controller->config.voltage_current_persist_ms,
+            force_current_violations) != 0U) {
             faults |= AMS_FAULT_CHARGE_OVERCURRENT;
             record_first_fault(&controller->decision,
                 AMS_FAULT_CHARGE_OVERCURRENT, now_ms,

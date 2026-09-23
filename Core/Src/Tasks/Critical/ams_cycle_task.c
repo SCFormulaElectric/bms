@@ -39,6 +39,33 @@ static void apply_safety_outputs(const ams_decision_t *decision)
     HAL_GPIO_WritePin(AMS_FAN_ENABLE_GPIO_PORT, AMS_FAN_ENABLE_PIN, fan);
 }
 
+static uint8_t service_fault_clear_request(app_data_t *data,
+    ams_controller_t *controller)
+{
+    uint8_t requested;
+
+    taskENTER_CRITICAL();
+    requested = data->fault_clear_requested;
+    data->fault_clear_requested = 0U;
+    taskEXIT_CRITICAL();
+    if (requested == 0U) {
+        return 0U;
+    }
+
+    ams_controller_clear_faults(controller);
+    apply_safety_outputs(&controller->decision);
+    taskENTER_CRITICAL();
+    data->ams_state = controller->decision.state;
+    data->active_faults = controller->decision.active_faults;
+    data->latched_faults = controller->decision.latched_faults;
+    data->discharge_enable_request = 0U;
+    data->charge_enable_request = 0U;
+    data->fan_enable_request = 0U;
+    data->first_fault = controller->decision.first_fault;
+    taskEXIT_CRITICAL();
+    return 1U;
+}
+
 static int32_t sum_pack_voltage(const ams_measurement_t *measurement)
 {
     uint16_t index;
@@ -74,6 +101,12 @@ void ams_cycle_task(void *argument)
         uint32_t immediate_faults = AMS_FAULT_NONE;
         uint8_t decision_ready = 0U;
         const uint32_t now_ms = (uint32_t)HAL_GetTick();
+
+        if (service_fault_clear_request(data, &controller) != 0U) {
+            xEventGroupSetBits(data->watchdog_events, WD_AMS_CYCLE);
+            vTaskDelay(pdMS_TO_TICKS(AMS_CRITICAL_CYCLE_PERIOD_MS));
+            continue;
+        }
 
         if (data->afe_bringup_status != (uint8_t)BQ79600_BRINGUP_OK) {
             immediate_faults |= AMS_FAULT_AFE_COMMUNICATION;

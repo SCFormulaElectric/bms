@@ -102,6 +102,18 @@ static void handle_command(app_data_t *data, bms_config_service_t *service,
                 return;
             }
             break;
+        case BMS_CAN_CMD_CLEAR_FAULTS:
+            result = bms_can_validate_clear_faults_request(message->data);
+            if (result == BMS_CAN_STATUS_OK) {
+                taskENTER_CRITICAL();
+                if (data->fault_clear_requested != 0U) {
+                    result = BMS_CAN_STATUS_BUSY;
+                } else {
+                    data->fault_clear_requested = 1U;
+                }
+                taskEXIT_CRITICAL();
+            }
+            break;
         case BMS_CAN_CMD_BEGIN:
             taskENTER_CRITICAL();
             memcpy(&service->staging, &data->summary_config,

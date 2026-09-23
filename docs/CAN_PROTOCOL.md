@@ -1,9 +1,10 @@
 # BMS CAN telemetry
 
 Bus speed is 500 kbit/s. Frames use standard 11-bit identifiers and
-little-endian multibyte fields. Incoming CAN accepts only the VCU
-telemetry-configuration command ID. These commands cannot change AMS
-thresholds, clear faults, or directly command a safety output.
+little-endian multibyte fields. Incoming CAN accepts only the VCU command ID.
+These commands cannot change AMS thresholds or directly command a safety
+output. The explicit manual fault-clear command only clears historical fault
+state; it does not override an active safety condition.
 
 ## One BMS namespace
 
@@ -69,9 +70,10 @@ range, or unknown enable bits.
 ## Runtime summary configuration
 
 The VCU sends versioned, eight-byte command frames on `0x5E0`. The BMS accepts
-read configuration, read slot, begin transaction, set count, set slot,
-validate, commit, save, and abort operations. Edits use a staging copy. An
-invalid or incomplete layout is rejected and never replaces the active layout.
+read configuration, read slot, clear faults, begin transaction, set count, set
+slot, validate, commit, save, and abort operations. Edits use a staging copy.
+An invalid or incomplete layout is rejected and never replaces the active
+layout.
 
 Each slot descriptor contains up to eight four-bit signal IDs. Signal widths
 and scaling are fixed by `bms_can_protocol.h`; the encoded widths in a slot
@@ -88,6 +90,53 @@ Responses on `0x6E0` contain version, echoed opcode, transaction ID, result,
 active generation, active count, and period in 100 ms units. Layout readbacks
 on `0x6D0 + slot` contain version, transaction, generation, slot, and the
 packed descriptor.
+
+## Manual fault clear
+
+Opcode `0x03` (`BMS_CAN_CMD_CLEAR_FAULTS`) requests a one-shot reset of the
+fault latch. It is never transmitted periodically. The request on standard ID
+`0x5E0`, DLC 8, is:
+
+| Byte | Value | Meaning |
+|---:|---:|---|
+| 0 | `0x01` | Protocol version |
+| 1 | `0x03` | Clear-faults opcode |
+| 2 | `TT` | Nonzero VCU transaction ID |
+| 3-7 | `0x00` | Reserved; any nonzero value is rejected with `BAD_VALUE` |
+
+For transaction `TT`, the exact request bytes are
+`01 03 TT 00 00 00 00 00`. A valid request is atomically posted to the AMS
+critical task. The response on standard ID `0x6E0`, DLC 8, uses the existing
+format:
+
+| Byte | Value | Meaning |
+|---:|---:|---|
+| 0 | `0x01` | Protocol version |
+| 1 | `0x03` | Echoed opcode |
+| 2 | `TT` | Echoed transaction ID |
+| 3 | `SS` | Status: `0x00` accepted, `0x03` zero transaction, `0x04` bad reserved data, or `0x08` busy |
+| 4 | `GG` | Active summary-layout generation |
+| 5 | `CC` | Active summary-frame count |
+| 6-7 | `32 00` | 5000 ms summary period in 100 ms units |
+
+Thus the response bytes are `01 03 TT SS GG CC 32 00`; with the default
+generation/count and an accepted request they are
+`01 03 TT 00 01 02 32 00`. Invalid protocol version uses `SS=01`; an invalid
+opcode uses `SS=02`. A frame with a DLC other than 8 is discarded by the CAN
+receive path and counted as malformed because it cannot contain the complete
+command fields needed for a response.
+
+The AMS critical task performs the clear: it deasserts charge, discharge, and
+fan requests; clears active and latched faults, first-fault data, and all fault
+persistence state; and resets the controller to `AMS_STATE_INIT`. SOC and
+other battery estimates are not reset. The reset iteration keeps all outputs
+deasserted. On the next valid controller cycle, a healthy system progresses
+`INIT -> SELF_TEST` and then `SELF_TEST -> STANDBY`. A condition that is still
+active is evaluated normally and relatches the fault; persisted conditions
+that are still violating on the first post-clear sample relatch immediately,
+while later new violations use their normal persistence interval. This command
+cannot force an output-enabled state and does not bypass AFE,
+measurement-validity, configuration, or hardware-commissioning checks.
 
 ## Default five-second summary payloads
 

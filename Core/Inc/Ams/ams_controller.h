@@ -18,11 +18,13 @@ typedef struct {
     uint8_t temperature_low_active[AMS_MAX_TEMPERATURES];
     uint8_t discharge_overcurrent_active;
     uint8_t charge_overcurrent_active;
+    uint8_t fault_clear_validation_pending;
     ams_decision_t decision;
 } ams_controller_t;
 
 void ams_controller_initialize(ams_controller_t *controller,
     const ams_config_t *config);
+void ams_controller_clear_faults(ams_controller_t *controller);
 void ams_controller_step(ams_controller_t *controller,
     const ams_measurement_t *measurement, uint32_t immediate_faults,
     uint32_t now_ms);
