@@ -149,9 +149,6 @@ void ams_cycle_task(void *argument)
             ams_controller_step(&controller, &measurement, immediate_faults,
                 now_ms);
             apply_safety_outputs(&controller.decision);
-            HAL_GPIO_WritePin(AMS_STATUS_LED_GPIO_PORT, AMS_STATUS_LED_PIN,
-                (controller.decision.latched_faults == AMS_FAULT_NONE) ?
-                    GPIO_PIN_SET : GPIO_PIN_RESET);
 
             taskENTER_CRITICAL();
             data->ams_state = controller.decision.state;

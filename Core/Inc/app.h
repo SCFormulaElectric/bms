@@ -15,12 +15,13 @@
 #include "queue.h"
 #include "task.h"
 
-#define NUM_TASKS              5U
+#define NUM_TASKS              6U
 #define AMS_CYCLE_PRIO         16U
 #define IWDG_PRIO              16U
 #define CAN_PRIO               10U
 #define BMS_CONFIG_PRIO         8U
 #define BMS_SUMMARY_PRIO        4U
+#define STATUS_LED_PRIO         2U
 
 #define CAN_QUEUE_LENGTH       16U
 #define CAN_RX_QUEUE_LENGTH    16U
