@@ -186,7 +186,8 @@ void ams_cycle_task(void *argument)
                     data->afe_bringup_status,
                     data->afe_bringup_failed_step,
                     data->afe_verified_devices,
-                    data->afe_bridge_device_config);
+                    data->afe_bridge_device_config,
+                    data->afe_bridge_response_valid);
                 last_telemetry_ms = now_ms;
             }
             xEventGroupSetBits(data->watchdog_events, WD_AMS_CYCLE);

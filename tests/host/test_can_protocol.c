@@ -46,5 +46,6 @@ int main(void)
     assert(CAN_ID_AMS_SUMMARY_SECONDARY == CAN_BMS_BASE_ID + 0xF1U);
     assert(CAN_ID_AMS_SUMMARY_SECONDARY <= 0x7FFU);
     assert((CAN_BMS_ENABLED_MESSAGES & ~CAN_BMS_MSG_ALL) == 0U);
+    assert(CAN_BMS_ENABLED_MESSAGES == CAN_BMS_MSG_AFE_STATUS);
     return 0;
 }

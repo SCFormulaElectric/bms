@@ -144,6 +144,7 @@ int main(void)
     app.afe_bringup_failed_step = (uint8_t)bringup.failed_step;
     app.afe_verified_devices = bringup.verified_stack_devices;
     app.afe_bridge_device_config = bringup.bridge_device_config;
+    app.afe_bridge_response_valid = bringup.bridge_response_valid;
   }
   if (app.afe_bringup_status != (uint8_t)BQ79600_BRINGUP_OK)
   {

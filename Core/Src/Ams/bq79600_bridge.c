@@ -272,6 +272,23 @@ static void set_failure(bq79600_bringup_result_t *result,
     result->failed_step = step;
 }
 
+static void probe_bridge_device_config(SPI_HandleTypeDef *spi,
+    bq79600_bringup_result_t *result)
+{
+    uint8_t response[BQ79600_RESPONSE_BYTES_ONE_REGISTER];
+    uint8_t value;
+
+    if (read_registers(spi, BQ796XX_SINGLE, 0U,
+        BQ79600_REG_DEVICE_CONFIG, 1U, response) != BQ79600_BRINGUP_OK) {
+        return;
+    }
+    if (validate_response(response, 0U, BQ79600_REG_DEVICE_CONFIG,
+        &value) == BQ79600_BRINGUP_OK) {
+        result->bridge_device_config = value;
+        result->bridge_response_valid = 1U;
+    }
+}
+
 bq79600_bringup_status_t bq79600_stack_bringup(
     SPI_HandleTypeDef *spi, uint8_t stack_devices,
     bq79600_bringup_result_t *result)
@@ -351,6 +368,9 @@ bq79600_bringup_status_t bq79600_stack_bringup(
             stack_devices, response);
         if (status != BQ79600_BRINGUP_OK) {
             set_failure(result, status, BQ79600_STEP_READ_DLL_SYNC);
+            /* Bring-up has already failed. This best-effort read only records
+             * whether the local bridge still returns a valid response. */
+            probe_bridge_device_config(spi, result);
             return status;
         }
         /* These reads exist to synchronize the read-direction DLL. TI notes
@@ -404,6 +424,7 @@ bq79600_bringup_status_t bq79600_stack_bringup(
         set_failure(result, status, BQ79600_STEP_VERIFY_BRIDGE);
         return status;
     }
+    result->bridge_response_valid = 1U;
     if (result->bridge_device_config != BQ79600_EXPECTED_DEVICE_CONFIG) {
         set_failure(result, BQ79600_BRINGUP_DEVICE_CONFIG_MISMATCH,
             BQ79600_STEP_VERIFY_BRIDGE);

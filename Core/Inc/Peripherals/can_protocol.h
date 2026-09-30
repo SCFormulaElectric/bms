@@ -23,9 +23,9 @@
 #define CAN_BMS_MSG_SUMMARY_PRIMARY       (1UL << 9)
 #define CAN_BMS_MSG_SUMMARY_SECONDARY    (1UL << 10)
 
-/* Optional 100 ms diagnostic telemetry is disabled by default. Runtime
- * five-second summaries are configured independently. */
-#define CAN_BMS_ENABLED_MESSAGES             0UL
+/* Publish AFE bring-up diagnostics at 100 ms. Runtime five-second summaries
+ * are configured independently. */
+#define CAN_BMS_ENABLED_MESSAGES CAN_BMS_MSG_AFE_STATUS
 
 #define CAN_BMS_MSG_ALL \
     (CAN_BMS_MSG_HEARTBEAT | CAN_BMS_MSG_PACK_STATUS | \

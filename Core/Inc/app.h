@@ -68,6 +68,7 @@ typedef struct app_data_s {
     volatile uint8_t afe_bringup_failed_step;
     volatile uint8_t afe_verified_devices;
     volatile uint8_t afe_bridge_device_config;
+    volatile uint8_t afe_bridge_response_valid;
     ams_fault_record_t first_fault;
 } app_data_t;
 

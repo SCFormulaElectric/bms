@@ -40,7 +40,8 @@ void ams_can_publish_snapshot(can_bus_t *bus, ams_can_cursor_t *cursor,
     const ams_config_t *config, const ams_measurement_t *measurement,
     const ams_battery_state_t *battery, const ams_decision_t *decision,
     uint8_t afe_bringup_status, uint8_t afe_bringup_failed_step,
-    uint8_t afe_verified_devices, uint8_t afe_bridge_device_config)
+    uint8_t afe_verified_devices, uint8_t afe_bridge_device_config,
+    uint8_t afe_bridge_response_valid)
 {
     uint8_t payload[8] = {0};
     uint16_t count;
@@ -112,6 +113,7 @@ void ams_can_publish_snapshot(can_bus_t *bus, ams_can_cursor_t *cursor,
         payload[2] = config->segment_count;
         payload[3] = afe_verified_devices;
         payload[4] = afe_bridge_device_config;
+        payload[5] = afe_bridge_response_valid;
         send_frame(bus, CAN_ID_AMS_AFE_STATUS, payload);
     }
 

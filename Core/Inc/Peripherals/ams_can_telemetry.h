@@ -16,6 +16,7 @@ void ams_can_publish_snapshot(can_bus_t *bus, ams_can_cursor_t *cursor,
     const ams_config_t *config, const ams_measurement_t *measurement,
     const ams_battery_state_t *battery, const ams_decision_t *decision,
     uint8_t afe_bringup_status, uint8_t afe_bringup_failed_step,
-    uint8_t afe_verified_devices, uint8_t afe_bridge_device_config);
+    uint8_t afe_verified_devices, uint8_t afe_bridge_device_config,
+    uint8_t afe_bridge_response_valid);
 
 #endif /* AMS_CAN_TELEMETRY_H */
