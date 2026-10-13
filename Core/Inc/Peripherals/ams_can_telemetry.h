@@ -8,6 +8,7 @@
 typedef struct {
     uint16_t next_cell;
     uint16_t next_temperature;
+    uint16_t next_gpio;
     uint8_t rolling_counter;
 } ams_can_cursor_t;
 

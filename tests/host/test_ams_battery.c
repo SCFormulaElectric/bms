@@ -58,9 +58,27 @@ static void test_coulomb_counting_and_polarity(void)
     assert(ams_config_convert_current_ma(&config, 3048U) == -1000);
 }
 
+static void test_updates_without_temperatures(void)
+{
+    ams_config_t config;
+    ams_battery_state_t battery;
+    ams_measurement_t measurement;
+
+    ams_config_load_defaults(&config);
+    ams_battery_initialize(&battery, &config, 800U);
+    measurement = measurement_for(&config, 3700, 0);
+    measurement.valid_temperature_count = 0U;
+    measurement.cell_voltage_mv[1] = 3650;
+    ams_battery_update(&battery, &config, &measurement, 10U);
+    assert(battery.minimum_cell_mv == 3650U);
+    assert(battery.minimum_cell_index == 1U);
+    assert(battery.maximum_temperature_dc == 0);
+}
+
 int main(void)
 {
     test_three_volts_forces_empty();
+    test_updates_without_temperatures();
     test_coulomb_counting_and_polarity();
     return 0;
 }

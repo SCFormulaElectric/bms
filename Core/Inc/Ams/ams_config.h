@@ -17,8 +17,6 @@
 #define AMS_CURRENT_POLARITY_NORMAL         1
 #define AMS_CURRENT_POLARITY_INVERTED      -1
 
-#define AMS_AFE_DMA_BUFFER_BYTES          256U
-#define AMS_AFE_DMA_TIMEOUT_MS              5U
 #define AMS_AFE_SERVICE_POLL_MS             1U
 #define AMS_CRITICAL_CYCLE_PERIOD_MS        20U
 

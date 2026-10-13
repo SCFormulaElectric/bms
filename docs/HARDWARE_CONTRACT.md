@@ -19,7 +19,10 @@
 
 - installed current-sensor part number, which of PA1/PA2 is authoritative,
   measured zero offset, gain, safe range and sign;
-- thermistor part number and validated ADC-code-to-temperature conversion;
+- thermistor part number and validated ADC-code-to-temperature conversion
+  (GPIOs are currently read only as voltages; see `CAN_BMS_MSG_GPIO_GROUPS`);
+- which BQ79616 GPIO pins the daughterboard thermistors use (firmware assumes
+  GPIO1..GPIO4) and wiring of unused VC inputs for a six-cell bench stack;
 - final number/order of segments and populated channels;
 - cell manufacturer limits and approved operational thresholds;
 - bench confirmation of PB3/PB4/PB6 downstream polarity, reset behavior,

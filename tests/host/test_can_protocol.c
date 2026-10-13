@@ -42,9 +42,12 @@ int main(void)
     assert(CAN_ID_AMS_PACK_STATUS == CAN_BMS_BASE_ID + 0x01U);
     assert(CAN_ID_AMS_CELL_GROUP_BASE == CAN_BMS_BASE_ID + 0x10U);
     assert(CAN_ID_AMS_TEMP_GROUP_BASE == CAN_BMS_BASE_ID + 0x40U);
+    assert(CAN_ID_AMS_GPIO_GROUP_BASE == CAN_BMS_BASE_ID + 0x50U);
     assert(CAN_ID_AMS_SUMMARY_PRIMARY == CAN_BMS_BASE_ID + 0xF0U);
     assert(CAN_ID_AMS_SUMMARY_SECONDARY == CAN_BMS_BASE_ID + 0xF1U);
     assert(CAN_ID_AMS_SUMMARY_SECONDARY <= 0x7FFU);
     assert((CAN_BMS_ENABLED_MESSAGES & ~CAN_BMS_MSG_ALL) == 0U);
+    /* AFE bring-up diagnostics must always be published. */
+    assert((CAN_BMS_ENABLED_MESSAGES & CAN_BMS_MSG_AFE_STATUS) != 0U);
     return 0;
 }

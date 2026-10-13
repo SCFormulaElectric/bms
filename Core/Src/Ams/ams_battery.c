@@ -58,8 +58,7 @@ void ams_battery_update(ams_battery_state_t *state,
 
     if (state == NULL || config == NULL || measurement == NULL ||
         measurement->status != AMS_SAMPLE_VALID ||
-        measurement->valid_cell_count == 0U ||
-        measurement->valid_temperature_count == 0U) {
+        measurement->valid_cell_count == 0U) {
         return;
     }
     capacity = capacity_mas(config);
@@ -82,8 +81,10 @@ void ams_battery_update(ams_battery_state_t *state,
             state->maximum_cell_index = index;
         }
     }
-    state->minimum_temperature_dc = measurement->temperature_dc[0];
-    state->maximum_temperature_dc = measurement->temperature_dc[0];
+    /* With no temperature channels (GPIO voltage mode) both report 0. */
+    state->minimum_temperature_dc = (measurement->valid_temperature_count != 0U) ?
+        measurement->temperature_dc[0] : 0;
+    state->maximum_temperature_dc = state->minimum_temperature_dc;
     for (index = 1U; index < measurement->valid_temperature_count; index++) {
         if (measurement->temperature_dc[index] <
             state->minimum_temperature_dc) {

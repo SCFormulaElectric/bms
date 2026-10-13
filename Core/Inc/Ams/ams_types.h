@@ -24,11 +24,15 @@ typedef enum {
 typedef struct {
     int32_t cell_voltage_mv[AMS_MAX_CELLS];
     int16_t temperature_dc[AMS_MAX_TEMPERATURES];
+    /* BQ79616 GPIO inputs read as absolute voltages (ADC-only mode). They are
+     * diagnostic and are not evaluated as temperatures. */
+    int32_t gpio_voltage_mv[AMS_MAX_TEMPERATURES];
     int32_t pack_current_ma;
     int32_t pack_voltage_mv;
     uint32_t timestamp_ms;
     uint16_t valid_cell_count;
     uint16_t valid_temperature_count;
+    uint16_t valid_gpio_count;
     ams_sample_status_t status;
 } ams_measurement_t;
 

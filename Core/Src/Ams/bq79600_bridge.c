@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Ams/ams_config.h"
+#include "Ams/bq79616_measurement.h"
 #include "Ams/bq796xx_protocol.h"
 #include "Peripherals/digital_pins.h"
 
@@ -29,8 +30,14 @@
 #define BQ79600_WRITE_RDY_TIMEOUT_US         250U
 #define BQ79600_SPI_HAL_TIMEOUT_MS              5U
 #define BQ79600_RESPONSE_BYTES_ONE_REGISTER     7U
+/* Largest response: a full cell block from every segment. */
 #define BQ79600_MAX_RESPONSE_BYTES \
-    (AMS_MAX_SEGMENTS * BQ79600_RESPONSE_BYTES_ONE_REGISTER)
+    (AMS_MAX_SEGMENTS * (BQ79616_RESPONSE_OVERHEAD_BYTES + \
+        2U * AMS_MAX_CELLS_PER_SEGMENT))
+/* The BQ79600 SPI response buffer is drained in blocks of at most 128 bytes,
+ * waiting for SPI_RDY before each block. */
+#define BQ79600_SPI_READ_CHUNK_BYTES          128U
+#define BQ79600_TSREF_SETTLE_US              2000U
 
 static void delay_us(uint32_t microseconds)
 {
@@ -171,18 +178,25 @@ static bq79600_bringup_status_t transmit_command(SPI_HandleTypeDef *spi,
         BQ79600_BRINGUP_SPI_ERROR;
 }
 
-static bq79600_bringup_status_t write_register(SPI_HandleTypeDef *spi,
+static bq79600_bringup_status_t write_registers(SPI_HandleTypeDef *spi,
     bq796xx_address_mode_t mode, uint8_t device, uint16_t address,
-    uint8_t value)
+    const uint8_t *values, uint8_t count)
 {
-    uint8_t frame[7];
+    uint8_t frame[14];
     const uint16_t length = bq796xx_build_write(mode, device, address,
-        &value, 1U, frame, sizeof(frame));
+        values, count, frame, sizeof(frame));
 
     if (length == 0U) {
         return BQ79600_BRINGUP_INVALID_ARGUMENT;
     }
     return transmit_command(spi, frame, length);
+}
+
+static bq79600_bringup_status_t write_register(SPI_HandleTypeDef *spi,
+    bq796xx_address_mode_t mode, uint8_t device, uint16_t address,
+    uint8_t value)
+{
+    return write_registers(spi, mode, device, address, &value, 1U);
 }
 
 static uint32_t read_timeout_us(uint8_t devices, uint16_t total_bytes)
@@ -195,41 +209,51 @@ static uint32_t read_timeout_us(uint8_t devices, uint16_t total_bytes)
 static bq79600_bringup_status_t receive_response(SPI_HandleTypeDef *spi,
     uint8_t devices, uint8_t *response, uint16_t response_bytes)
 {
-    uint8_t dummy[BQ79600_MAX_RESPONSE_BYTES];
+    static uint8_t dummy[BQ79600_SPI_READ_CHUNK_BYTES];
     HAL_StatusTypeDef hal_status;
+    uint16_t offset = 0U;
 
     if (response_bytes == 0U ||
         response_bytes > BQ79600_MAX_RESPONSE_BYTES) {
         return BQ79600_BRINGUP_INVALID_ARGUMENT;
     }
-    if (wait_ready(read_timeout_us(devices, response_bytes)) == 0U) {
-        (void)comm_clear(spi);
-        return BQ79600_BRINGUP_RDY_TIMEOUT;
-    }
-    memset(dummy, 0xFF, response_bytes);
-    HAL_GPIO_WritePin(AMS_AFE_CS_GPIO_PORT, AMS_AFE_CS_PIN, GPIO_PIN_RESET);
-    delay_us(BQ79600_SPI_FRAME_GUARD_US);
-    hal_status = HAL_SPI_TransmitReceive(spi, dummy, response,
-        response_bytes, BQ79600_SPI_HAL_TIMEOUT_MS);
-    delay_us(BQ79600_SPI_FRAME_GUARD_US);
-    HAL_GPIO_WritePin(AMS_AFE_CS_GPIO_PORT, AMS_AFE_CS_PIN, GPIO_PIN_SET);
-    delay_us(BQ79600_SPI_FRAME_GUARD_US);
-    if (hal_status != HAL_OK) {
-        return BQ79600_BRINGUP_SPI_ERROR;
+    memset(dummy, 0xFF, sizeof(dummy));
+    while (offset < response_bytes) {
+        uint16_t chunk = (uint16_t)(response_bytes - offset);
+
+        if (chunk > BQ79600_SPI_READ_CHUNK_BYTES) {
+            chunk = BQ79600_SPI_READ_CHUNK_BYTES;
+        }
+        if (wait_ready(read_timeout_us(devices, response_bytes)) == 0U) {
+            (void)comm_clear(spi);
+            return BQ79600_BRINGUP_RDY_TIMEOUT;
+        }
+        HAL_GPIO_WritePin(AMS_AFE_CS_GPIO_PORT, AMS_AFE_CS_PIN,
+            GPIO_PIN_RESET);
+        delay_us(BQ79600_SPI_FRAME_GUARD_US);
+        hal_status = HAL_SPI_TransmitReceive(spi, dummy, &response[offset],
+            chunk, BQ79600_SPI_HAL_TIMEOUT_MS);
+        delay_us(BQ79600_SPI_FRAME_GUARD_US);
+        HAL_GPIO_WritePin(AMS_AFE_CS_GPIO_PORT, AMS_AFE_CS_PIN, GPIO_PIN_SET);
+        delay_us(BQ79600_SPI_FRAME_GUARD_US);
+        if (hal_status != HAL_OK) {
+            return BQ79600_BRINGUP_SPI_ERROR;
+        }
+        offset = (uint16_t)(offset + chunk);
     }
     return BQ79600_BRINGUP_OK;
 }
 
-static bq79600_bringup_status_t read_registers(SPI_HandleTypeDef *spi,
+static bq79600_bringup_status_t read_block(SPI_HandleTypeDef *spi,
     bq796xx_address_mode_t mode, uint8_t device, uint16_t address,
-    uint8_t device_count, uint8_t *response)
+    uint8_t data_bytes, uint8_t device_count, uint8_t *response)
 {
     uint8_t command[7];
     uint16_t command_length;
     uint16_t response_bytes;
     bq79600_bringup_status_t status;
 
-    command_length = bq796xx_build_read(mode, device, address, 1U,
+    command_length = bq796xx_build_read(mode, device, address, data_bytes,
         command, sizeof(command));
     if (command_length == 0U || device_count == 0U) {
         return BQ79600_BRINGUP_INVALID_ARGUMENT;
@@ -239,8 +263,16 @@ static bq79600_bringup_status_t read_registers(SPI_HandleTypeDef *spi,
         return status;
     }
     response_bytes = (uint16_t)device_count *
-        BQ79600_RESPONSE_BYTES_ONE_REGISTER;
+        (BQ79616_RESPONSE_OVERHEAD_BYTES + (uint16_t)data_bytes);
     return receive_response(spi, device_count, response, response_bytes);
+}
+
+static bq79600_bringup_status_t read_registers(SPI_HandleTypeDef *spi,
+    bq796xx_address_mode_t mode, uint8_t device, uint16_t address,
+    uint8_t device_count, uint8_t *response)
+{
+    return read_block(spi, mode, device, address, 1U, device_count,
+        response);
 }
 
 static bq79600_bringup_status_t validate_response(const uint8_t *frame,
@@ -412,5 +444,98 @@ bq79600_bringup_status_t bq79600_stack_bringup(
 
     result->status = BQ79600_BRINGUP_OK;
     result->failed_step = BQ79600_STEP_NONE;
+    return BQ79600_BRINGUP_OK;
+}
+
+static uint8_t measurement_topology_valid(SPI_HandleTypeDef *spi,
+    uint8_t stack_devices, uint8_t cells_per_device,
+    uint8_t gpios_per_device)
+{
+    return (spi != NULL && spi->Instance == SPI1 &&
+        stack_devices != 0U && stack_devices <= AMS_MAX_SEGMENTS &&
+        cells_per_device >= BQ79616_MIN_CELLS &&
+        cells_per_device <= AMS_MAX_CELLS_PER_SEGMENT &&
+        gpios_per_device <= AMS_MAX_TEMPS_PER_SEGMENT) ? 1U : 0U;
+}
+
+bq79600_bringup_status_t bq79600_configure_measurements(
+    SPI_HandleTypeDef *spi, uint8_t stack_devices, uint8_t cells_per_device,
+    uint8_t gpios_per_device, bq79600_bringup_result_t *result)
+{
+    bq79600_bringup_result_t local_result = {0};
+    bq79600_bringup_status_t status;
+    uint8_t gpio_conf[BQ79616_GPIO_CONF_REGISTERS];
+    uint8_t response[BQ79600_MAX_RESPONSE_BYTES];
+    const uint8_t active_cell = bq79616_active_cell_value(cells_per_device);
+    uint8_t index;
+
+    if (result == NULL) {
+        result = &local_result;
+    }
+    if (measurement_topology_valid(spi, stack_devices, cells_per_device,
+        gpios_per_device) == 0U ||
+        bq79616_gpio_voltage_conf(gpios_per_device, gpio_conf) == 0U) {
+        set_failure(result, BQ79600_BRINGUP_INVALID_ARGUMENT,
+            BQ79600_STEP_CONFIGURE_MEASUREMENT);
+        return result->status;
+    }
+
+    status = write_register(spi, BQ796XX_STACK, 0U,
+        BQ79616_REG_ACTIVE_CELL, active_cell);
+    if (status == BQ79600_BRINGUP_OK) {
+        status = write_registers(spi, BQ796XX_STACK, 0U,
+            BQ79616_REG_GPIO_CONF1, gpio_conf, sizeof(gpio_conf));
+    }
+    if (status == BQ79600_BRINGUP_OK) {
+        /* TSREF biases the daughterboard thermistor dividers, so the GPIO
+         * voltages are meaningful even though they are not converted. */
+        status = write_register(spi, BQ796XX_STACK, 0U,
+            BQ79616_REG_CONTROL2, BQ79616_CONTROL2_TSREF_EN);
+    }
+    if (status == BQ79600_BRINGUP_OK) {
+        delay_us(BQ79600_TSREF_SETTLE_US);
+        status = write_register(spi, BQ796XX_STACK, 0U,
+            BQ79616_REG_ADC_CONF1, BQ79616_ADC_CONF1_LPF_VCELL_26HZ);
+    }
+    if (status == BQ79600_BRINGUP_OK) {
+        status = write_register(spi, BQ796XX_STACK, 0U,
+            BQ79616_REG_ADC_CTRL1, BQ79616_ADC_CTRL1_CONTINUOUS);
+    }
+    if (status != BQ79600_BRINGUP_OK) {
+        set_failure(result, status, BQ79600_STEP_CONFIGURE_MEASUREMENT);
+        return status;
+    }
+
+    status = read_registers(spi, BQ796XX_STACK, 0U,
+        BQ79616_REG_ACTIVE_CELL, stack_devices, response);
+    if (status != BQ79600_BRINGUP_OK) {
+        set_failure(result, status, BQ79600_STEP_VERIFY_MEASUREMENT);
+        return status;
+    }
+    for (index = 0U; index < stack_devices; index++) {
+        uint8_t device;
+        uint16_t address;
+        uint8_t value;
+        const bq796xx_response_status_t parse_status =
+            bq796xx_parse_response(
+                &response[index * BQ79600_RESPONSE_BYTES_ONE_REGISTER],
+                BQ79600_RESPONSE_BYTES_ONE_REGISTER, &device, &address,
+                &value, 1U);
+        if (parse_status == BQ796XX_RESPONSE_BAD_CRC) {
+            (void)comm_clear(spi);
+            set_failure(result, BQ79600_BRINGUP_RESPONSE_CRC,
+                BQ79600_STEP_VERIFY_MEASUREMENT);
+            return result->status;
+        }
+        if (parse_status != BQ796XX_RESPONSE_OK ||
+            address != BQ79616_REG_ACTIVE_CELL || device == 0U ||
+            device > stack_devices || value != active_cell) {
+            set_failure(result, BQ79600_BRINGUP_RESPONSE_FORMAT,
+                BQ79600_STEP_VERIFY_MEASUREMENT);
+            return result->status;
+        }
+    }
+
+    delay_us(BQ79616_LPF_VCELL_26HZ_SETTLE_US + 5U * stack_devices);
     return BQ79600_BRINGUP_OK;
 }

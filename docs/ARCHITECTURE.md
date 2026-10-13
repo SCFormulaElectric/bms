@@ -8,9 +8,28 @@ continuously copied to flash. Internal flash stores only validated configuration
 records and occasional SOC checkpoints.
 
 The BQ79600 does not autonomously write STM32 RAM. The STM32 initiates SPI
-transactions and its DMA controller copies SPI bytes into fixed ping-pong RAM
-buffers. Complete decoded snapshots are atomically published to the safety
-logic.
+transactions. After bring-up, `bq79600_configure_measurements` sets every
+BQ79616 to `cells_per_segment` active cells (cells on VC0 up, unused inputs
+tied per the TI datasheet), GPIO1..`temperatures_per_segment` as ADC-only
+absolute-voltage inputs, TSREF on, a 26 Hz cell low-pass filter and continuous
+main-ADC conversion, then reads ACTIVE_CELL back from every device.
+
+At runtime the critical task reads the latest VCELL and GPIO blocks without
+blocking. A BQ79600 read is three phases, not one SPI transfer: send the
+command once SPI_RDY is high, wait for SPI_RDY to show the stack response is
+buffered, then clock the response out with dummy bytes in chunks of at most
+128 bytes, waiting for SPI_RDY before each chunk. The HAL-free, host-tested
+`bq79600_reader` sequences those phases with timeouts and decodes frames with
+`bq79616_measurement` (CRC, register, one frame per device). `ams_afe` is the
+hardware glue: it samples SPI_RDY, frames each transfer with nCS and runs it
+as SPI1 DMA. The task polls it every `AMS_AFE_SERVICE_POLL_MS` while a sample
+is in flight. Any failure sends a one-byte communication clear and the next
+sample starts fresh.
+
+GPIO inputs are reported as millivolts, not temperatures. With no temperature
+channels the controller still evaluates cell limits but latches
+`AMS_FAULT_NOT_COMMISSIONED`, so outputs cannot be enabled without validated
+temperature monitoring.
 
 Before DMA or the scheduler starts, firmware loads the persisted topology and
 runs the complete forward-direction bring-up. The board driver temporarily

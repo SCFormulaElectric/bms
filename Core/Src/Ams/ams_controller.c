@@ -96,12 +96,20 @@ void ams_controller_step(ams_controller_t *controller,
         ams_config_temperature_count(&controller->config);
     if (measurement == NULL || measurement->status != AMS_SAMPLE_VALID ||
         measurement->valid_cell_count != expected_cells ||
-        measurement->valid_temperature_count != expected_temperatures ||
+        (measurement->valid_temperature_count != expected_temperatures &&
+         measurement->valid_temperature_count != 0U) ||
         (uint32_t)(now_ms - measurement->timestamp_ms) >
             controller->config.measurement_max_age_ms) {
         faults |= AMS_FAULT_AFE_COMMUNICATION;
     } else {
         int16_t maximum_temperature = measurement->temperature_dc[0];
+        if (measurement->valid_temperature_count == 0U) {
+            /* GPIOs are read as raw voltages, so nothing monitors cell
+             * temperature. Cell limits are still evaluated, but the pack is
+             * not commissioned and outputs stay off. */
+            faults |= AMS_FAULT_NOT_COMMISSIONED;
+            expected_temperatures = 0U;
+        }
         for (index = 0U; index < expected_cells; index++) {
             const int32_t voltage = measurement->cell_voltage_mv[index];
             const uint16_t segment =
@@ -171,7 +179,7 @@ void ams_controller_step(ams_controller_t *controller,
                     segment, channel);
             }
         }
-        if (maximum_temperature >=
+        if (expected_temperatures != 0U && maximum_temperature >=
             controller->config.fan_on_temperature_dc &&
             AMS_HARDWARE_OUTPUTS_COMMISSIONED != 0U) {
             controller->decision.fan_enable_request = 1U;

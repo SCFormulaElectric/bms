@@ -29,9 +29,10 @@ Each message then adds its fixed subitem offset:
 | `0x03` | `0x603` | `CAN_BMS_MSG_TEMPERATURES` | 100 ms | min/max temperature 0.1 C i16/i16, temperature count u16, cell count u16 |
 | `0x04` | `0x604` | `CAN_BMS_MSG_FAULTS` | 100 ms | active fault mask u32, latched fault mask u32 |
 | `0x05` | `0x605` | `CAN_BMS_MSG_OUTPUTS_LIMITS` | 100 ms | output/anchor bits u8, current polarity i8, discharge/charge limits A u16/u16, segment count u8, cells/segment u8 |
-| `0x06` | `0x606` | `CAN_BMS_MSG_AFE_STATUS` | 100 ms | bring-up status u8, failed step u8, configured/verified segments u8/u8, BQ79600 DEVICE_CONFIG u8, reserved u8[3] |
+| `0x06` | `0x606` | `CAN_BMS_MSG_AFE_STATUS` | 100 ms | bring-up status u8, failed step u8, configured/verified segments u8/u8, BQ79600 DEVICE_CONFIG u8, valid bridge response u8, reserved u8[2] |
 | `0x10+` | `0x610+` | `CAN_BMS_MSG_CELL_GROUPS` | rotating at 100 ms | four cell voltages in mV u16[4] |
 | `0x40+` | `0x640+` | `CAN_BMS_MSG_TEMP_GROUPS` | rotating at 100 ms | four temperatures in 0.1 C i16[4] |
+| `0x50+` | `0x650+` | `CAN_BMS_MSG_GPIO_GROUPS` | rotating at 100 ms | four BQ79616 GPIO voltages in mV i16[4] |
 | `0xD0-0xDF` | `0x6D0-0x6DF` | runtime layout readback | on request | slot descriptor |
 | `0xE0` | `0x6E0` | runtime configuration response | on request | ACK/NACK and layout metadata |
 | `0xF0-0xFF` | `0x6F0-0x6FF` | runtime summary slots | 5 s | 0-16 configured summary frames |
@@ -40,12 +41,20 @@ Each message then adds its fixed subitem offset:
 
 Edit `CAN_BMS_ENABLED_MESSAGES` in the same `can_protocol.h` file to control
 the optional 100 ms diagnostic telemetry. Five-second summaries are controlled
-at runtime and default to the two legacy frames. Fast telemetry is disabled by
-default:
+at runtime and default to the two legacy frames. AFE status is always enabled
+so bring-up failures can be diagnosed. For bench bring-up the current default
+also enables faults, per-cell voltages and GPIO voltages:
 
 ```c
-#define CAN_BMS_ENABLED_MESSAGES 0UL
+#define CAN_BMS_ENABLED_MESSAGES \
+    (CAN_BMS_MSG_FAULTS | CAN_BMS_MSG_AFE_STATUS | \
+     CAN_BMS_MSG_CELL_GROUPS | CAN_BMS_MSG_GPIO_GROUPS)
 ```
+
+Group frames carry four channels each, ordered segment by segment (cell 1 or
+GPIO1 of segment 1 first). Unused slots in the last frame are `0xFFFF`. GPIO
+group N holds GPIO channels 4N..4N+3 in the flat list of
+`segment_count * temperatures_per_segment` channels.
 
 Examples:
 
@@ -163,4 +172,8 @@ Pack voltage and current saturate at their encoded type limits. Until the first
 valid AFE sample, measurement fields are zero and the AFE communication fault
 indicates that the values are unavailable. For AFE status, status 0 and failed
 step 0 indicate successful bring-up; configured and verified segment counts
-must match, and the expected BQ79600 DEVICE_CONFIG value is `0x14`.
+must match, and the expected BQ79600 DEVICE_CONFIG value is `0x14`. Byte 5 of
+`0x606` is one only when the bridge returned a correctly formatted,
+CRC-validated response. With one configured but disconnected segment, a frame
+of `03 08 01 00 14 01 00 00` therefore proves local BQ79600 communication
+while still reporting the unchanged stack read timeout.

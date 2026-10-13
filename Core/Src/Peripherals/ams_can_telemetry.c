@@ -149,4 +149,21 @@ void ams_can_publish_snapshot(can_bus_t *bus, ams_can_cursor_t *cursor,
         cursor->next_temperature =
             (uint16_t)(cursor->next_temperature + 4U);
     }
+
+    count = measurement->valid_gpio_count;
+    if (CAN_BMS_MESSAGE_ENABLED(CAN_BMS_MSG_GPIO_GROUPS) && count != 0U) {
+        if (cursor->next_gpio >= count) {
+            cursor->next_gpio = 0U;
+        }
+        memset(payload, 0xFF, sizeof(payload));
+        for (index = 0U; index < 4U &&
+            (uint16_t)(cursor->next_gpio + index) < count; index++) {
+            put_u16(&payload[index * 2U],
+                (uint16_t)(int16_t)measurement->gpio_voltage_mv[
+                    cursor->next_gpio + index]);
+        }
+        send_frame(bus, (uint16_t)(CAN_ID_AMS_GPIO_GROUP_BASE +
+            cursor->next_gpio / 4U), payload);
+        cursor->next_gpio = (uint16_t)(cursor->next_gpio + 4U);
+    }
 }

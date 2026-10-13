@@ -140,6 +140,13 @@ int main(void)
     (void)ams_persistence_load(&app.config, &app.summary_config,
         &app.initial_soc_permille, NULL);
     (void)bq79600_stack_bringup(&hspi1, app.config.segment_count, &bringup);
+    if (bringup.status == BQ79600_BRINGUP_OK)
+    {
+      /* GPIO thermistor inputs are read as voltages, not temperatures. */
+      (void)bq79600_configure_measurements(&hspi1, app.config.segment_count,
+          app.config.cells_per_segment, app.config.temperatures_per_segment,
+          &bringup);
+    }
     app.afe_bringup_status = (uint8_t)bringup.status;
     app.afe_bringup_failed_step = (uint8_t)bringup.failed_step;
     app.afe_verified_devices = bringup.verified_stack_devices;

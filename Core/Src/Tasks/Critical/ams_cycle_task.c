@@ -85,16 +85,14 @@ void ams_cycle_task(void *argument)
     static ams_battery_state_t battery;
     static ams_can_cursor_t can_cursor;
     const ams_config_t *config = &data->config;
-    ams_afe_status_t afe_status;
-    uint32_t sample_counter = 0U;
     uint32_t last_telemetry_ms = 0U;
+    ams_afe_status_t afe_status;
 
     ams_battery_initialize(&battery, config, data->initial_soc_permille);
     ams_can_cursor_reset(&can_cursor);
-    ams_afe_reset(&afe);
     ams_controller_initialize(&controller, config);
-    afe_status = ams_afe_initialize(&afe, &hspi1,
-        ams_afe_default_profile());
+    (void)ams_afe_initialize(&afe, &hspi1, config->segment_count,
+        config->cells_per_segment, config->temperatures_per_segment);
 
     for (;;) {
         ams_measurement_t measurement;
@@ -108,90 +106,85 @@ void ams_cycle_task(void *argument)
             continue;
         }
 
-        if (data->afe_bringup_status != (uint8_t)BQ79600_BRINGUP_OK) {
-            immediate_faults |= AMS_FAULT_AFE_COMMUNICATION;
-        }
-
-        afe_status = ams_afe_service(&afe, now_ms);
+        /* The BQ79616s convert continuously (configured at boot). The AFE
+         * pipeline reads the latest results over DMA without blocking; poll
+         * it every millisecond until a sample completes or fails. */
+        afe_status = (data->afe_bringup_status ==
+            (uint8_t)BQ79600_BRINGUP_OK) ?
+            ams_afe_service(&afe, now_ms, &measurement) :
+            AMS_AFE_NOT_COMMISSIONED;
         if (afe_status == AMS_AFE_NEW_SAMPLE) {
-            if (ams_afe_fetch_latest(&afe, &measurement,
-                &sample_counter) == AMS_AFE_OK) {
-                adc_snapshot_t current_snapshot;
-                if (adc_acquisition_read(&current_snapshot, now_ms) ==
-                    ADC_SNAPSHOT_OK) {
-                    measurement.pack_current_ma =
-                        ams_config_convert_current_ma(config,
-                            current_snapshot.channels[
-                                config->current_adc_channel]);
-                } else {
-                    immediate_faults |= AMS_FAULT_CURRENT_SENSOR;
-                }
-                measurement.pack_voltage_mv = sum_pack_voltage(&measurement);
-                decision_ready = 1U;
+            adc_snapshot_t current_snapshot;
+            if (adc_acquisition_read(&current_snapshot, now_ms) ==
+                ADC_SNAPSHOT_OK) {
+                measurement.pack_current_ma =
+                    ams_config_convert_current_ma(config,
+                        current_snapshot.channels[
+                            config->current_adc_channel]);
             } else {
-                afe_status = AMS_AFE_INVALID_DATA;
+                immediate_faults |= AMS_FAULT_CURRENT_SENSOR;
             }
-        }
-        if (afe_status != AMS_AFE_OK &&
-            afe_status != AMS_AFE_IN_PROGRESS &&
-            afe_status != AMS_AFE_NEW_SAMPLE) {
+            measurement.pack_voltage_mv = sum_pack_voltage(&measurement);
+            measurement.timestamp_ms = now_ms;
+            decision_ready = 1U;
+        } else if (afe_status != AMS_AFE_IN_PROGRESS) {
             memset(&measurement, 0, sizeof(measurement));
             measurement.timestamp_ms = now_ms;
             measurement.status = AMS_SAMPLE_UNAVAILABLE;
             immediate_faults |= AMS_FAULT_AFE_COMMUNICATION;
             decision_ready = 1U;
         }
-
-        if (decision_ready != 0U) {
-            if (measurement.status == AMS_SAMPLE_VALID) {
-                ams_battery_update(&battery, config, &measurement, now_ms);
-            }
-            ams_controller_step(&controller, &measurement, immediate_faults,
-                now_ms);
-            apply_safety_outputs(&controller.decision);
-
-            taskENTER_CRITICAL();
-            data->ams_state = controller.decision.state;
-            data->active_faults = controller.decision.active_faults;
-            data->latched_faults = controller.decision.latched_faults;
-            data->discharge_enable_request =
-                controller.decision.discharge_enable_request;
-            data->charge_enable_request =
-                controller.decision.charge_enable_request;
-            data->fan_enable_request =
-                controller.decision.fan_enable_request;
-            data->soc_permille = battery.soc_permille;
-            if (measurement.status == AMS_SAMPLE_VALID) {
-                data->pack_voltage_mv = measurement.pack_voltage_mv;
-                data->pack_current_ma = measurement.pack_current_ma;
-                data->minimum_cell_mv = battery.minimum_cell_mv;
-                data->maximum_cell_mv = battery.maximum_cell_mv;
-                data->maximum_temperature_dc =
-                    battery.maximum_temperature_dc;
-                data->valid_cell_count = measurement.valid_cell_count;
-                data->valid_temperature_count =
-                    measurement.valid_temperature_count;
-            }
-            data->first_fault = controller.decision.first_fault;
-            taskEXIT_CRITICAL();
-
-            if (CAN_BMS_FAST_TELEMETRY_ENABLED &&
-                (uint32_t)(now_ms - last_telemetry_ms) >=
-                    CAN_AMS_TELEMETRY_PERIOD_MS) {
-                ams_can_publish_snapshot(&data->can_bus, &can_cursor, config,
-                    &measurement, &battery, &controller.decision,
-                    data->afe_bringup_status,
-                    data->afe_bringup_failed_step,
-                    data->afe_verified_devices,
-                    data->afe_bridge_device_config);
-                last_telemetry_ms = now_ms;
-            }
-            xEventGroupSetBits(data->watchdog_events, WD_AMS_CYCLE);
+        if (decision_ready == 0U) {
+            vTaskDelay(pdMS_TO_TICKS(AMS_AFE_SERVICE_POLL_MS));
+            continue;
         }
 
-        vTaskDelay((afe_status == AMS_AFE_IN_PROGRESS) ?
-            pdMS_TO_TICKS(AMS_AFE_SERVICE_POLL_MS) :
-            pdMS_TO_TICKS(AMS_CRITICAL_CYCLE_PERIOD_MS));
+        if (measurement.status == AMS_SAMPLE_VALID) {
+            ams_battery_update(&battery, config, &measurement, now_ms);
+        }
+        ams_controller_step(&controller, &measurement, immediate_faults,
+            now_ms);
+        apply_safety_outputs(&controller.decision);
+
+        taskENTER_CRITICAL();
+        data->ams_state = controller.decision.state;
+        data->active_faults = controller.decision.active_faults;
+        data->latched_faults = controller.decision.latched_faults;
+        data->discharge_enable_request =
+            controller.decision.discharge_enable_request;
+        data->charge_enable_request =
+            controller.decision.charge_enable_request;
+        data->fan_enable_request =
+            controller.decision.fan_enable_request;
+        data->soc_permille = battery.soc_permille;
+        if (measurement.status == AMS_SAMPLE_VALID) {
+            data->pack_voltage_mv = measurement.pack_voltage_mv;
+            data->pack_current_ma = measurement.pack_current_ma;
+            data->minimum_cell_mv = battery.minimum_cell_mv;
+            data->maximum_cell_mv = battery.maximum_cell_mv;
+            data->maximum_temperature_dc =
+                battery.maximum_temperature_dc;
+            data->valid_cell_count = measurement.valid_cell_count;
+            data->valid_temperature_count =
+                measurement.valid_temperature_count;
+        }
+        data->first_fault = controller.decision.first_fault;
+        taskEXIT_CRITICAL();
+
+        if (CAN_BMS_FAST_TELEMETRY_ENABLED &&
+            (uint32_t)(now_ms - last_telemetry_ms) >=
+                CAN_AMS_TELEMETRY_PERIOD_MS) {
+            ams_can_publish_snapshot(&data->can_bus, &can_cursor, config,
+                &measurement, &battery, &controller.decision,
+                data->afe_bringup_status,
+                data->afe_bringup_failed_step,
+                data->afe_verified_devices,
+                data->afe_bridge_device_config);
+            last_telemetry_ms = now_ms;
+        }
+        xEventGroupSetBits(data->watchdog_events, WD_AMS_CYCLE);
+
+        vTaskDelay(pdMS_TO_TICKS(AMS_CRITICAL_CYCLE_PERIOD_MS));
     }
 }
 

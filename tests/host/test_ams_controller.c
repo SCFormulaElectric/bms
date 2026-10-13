@@ -53,7 +53,7 @@ static void test_voltage_fault_persistence(void)
     ams_measurement_t measurement = nominal_measurement(&config);
 
     ams_controller_initialize(&controller, &config);
-    measurement.cell_voltage_mv[7] = config.cell_overvoltage_mv + 1;
+    measurement.cell_voltage_mv[5] = config.cell_overvoltage_mv + 1;
     ams_controller_step(&controller, &measurement, AMS_FAULT_NONE, 100U);
     assert((controller.decision.active_faults &
         AMS_FAULT_CELL_OVERVOLTAGE) == 0U);
@@ -65,7 +65,7 @@ static void test_voltage_fault_persistence(void)
         100U + config.voltage_current_persist_ms);
     assert((controller.decision.latched_faults &
         AMS_FAULT_CELL_OVERVOLTAGE) != 0U);
-    assert(controller.decision.first_fault.channel == 7U);
+    assert(controller.decision.first_fault.channel == 5U);
 }
 
 static void test_transient_voltage_violation_clears_debounce(void)
@@ -93,7 +93,7 @@ static void test_clear_faults_resets_controller_and_recovers(void)
     ams_measurement_t measurement = nominal_measurement(&config);
 
     ams_controller_initialize(&controller, &config);
-    measurement.cell_voltage_mv[7] = config.cell_overvoltage_mv + 1;
+    measurement.cell_voltage_mv[5] = config.cell_overvoltage_mv + 1;
     ams_controller_step(&controller, &measurement, AMS_FAULT_NONE, 100U);
     ams_controller_step(&controller, &measurement, AMS_FAULT_NONE,
         100U + config.voltage_current_persist_ms);
@@ -106,8 +106,8 @@ static void test_clear_faults_resets_controller_and_recovers(void)
     assert(controller.decision.active_faults == AMS_FAULT_NONE);
     assert(controller.decision.latched_faults == AMS_FAULT_NONE);
     assert(controller.decision.first_fault.bits == AMS_FAULT_NONE);
-    assert(controller.voltage_high_active[7] == 0U);
-    assert(controller.voltage_high_since[7] == 0U);
+    assert(controller.voltage_high_active[5] == 0U);
+    assert(controller.voltage_high_since[5] == 0U);
     assert(controller.decision.discharge_enable_request == 0U);
     assert(controller.decision.charge_enable_request == 0U);
     assert(controller.decision.fan_enable_request == 0U);
@@ -118,11 +118,43 @@ static void test_clear_faults_resets_controller_and_recovers(void)
         AMS_FAULT_CELL_OVERVOLTAGE) != 0U);
 
     ams_controller_clear_faults(&controller);
-    measurement.cell_voltage_mv[7] = 3700;
+    measurement.cell_voltage_mv[5] = 3700;
     ams_controller_step(&controller, &measurement, AMS_FAULT_NONE, 800U);
     assert(controller.decision.state == AMS_STATE_SELF_TEST);
     ams_controller_step(&controller, &measurement, AMS_FAULT_NONE, 900U);
     assert(controller.decision.state == AMS_STATE_STANDBY);
+}
+
+static void test_voltage_only_gpio_mode_is_not_commissioned(void)
+{
+    ams_controller_t controller;
+    ams_config_t config = nominal_config();
+    ams_measurement_t measurement = nominal_measurement(&config);
+
+    ams_controller_initialize(&controller, &config);
+    measurement.valid_temperature_count = 0U;
+    ams_controller_step(&controller, &measurement, AMS_FAULT_NONE, 10U);
+    assert((controller.decision.latched_faults &
+        AMS_FAULT_NOT_COMMISSIONED) != 0U);
+    assert((controller.decision.latched_faults &
+        AMS_FAULT_AFE_COMMUNICATION) == 0U);
+    assert(controller.decision.fan_enable_request == 0U);
+
+    /* Cell limits are still evaluated without temperatures. */
+    measurement.cell_voltage_mv[2] = config.cell_undervoltage_mv - 1;
+    ams_controller_step(&controller, &measurement, AMS_FAULT_NONE, 20U);
+    ams_controller_step(&controller, &measurement, AMS_FAULT_NONE,
+        20U + config.voltage_current_persist_ms);
+    assert((controller.decision.latched_faults &
+        AMS_FAULT_CELL_UNDERVOLTAGE) != 0U);
+
+    /* A partial temperature set is still a communication fault. */
+    ams_controller_initialize(&controller, &config);
+    measurement = nominal_measurement(&config);
+    measurement.valid_temperature_count = 1U;
+    ams_controller_step(&controller, &measurement, AMS_FAULT_NONE, 10U);
+    assert((controller.decision.latched_faults &
+        AMS_FAULT_AFE_COMMUNICATION) != 0U);
 }
 
 int main(void)
@@ -131,5 +163,6 @@ int main(void)
     test_voltage_fault_persistence();
     test_transient_voltage_violation_clears_debounce();
     test_clear_faults_resets_controller_and_recovers();
+    test_voltage_only_gpio_mode_is_not_commissioned();
     return 0;
 }

@@ -34,6 +34,19 @@ $tests = @(
             'Core\Src\Ams\bq796xx_protocol.c')
     },
     @{
+        Name = 'bq79616_measurement'
+        Sources = @('tests\host\test_bq79616_measurement.c',
+            'Core\Src\Ams\bq79616_measurement.c',
+            'Core\Src\Ams\bq796xx_protocol.c')
+    },
+    @{
+        Name = 'bq79600_reader'
+        Sources = @('tests\host\test_bq79600_reader.c',
+            'Core\Src\Ams\bq79600_reader.c',
+            'Core\Src\Ams\bq79616_measurement.c',
+            'Core\Src\Ams\bq796xx_protocol.c')
+    },
+    @{
         Name = 'adc_snapshot'
         Sources = @('tests\host\test_adc_snapshot.c',
             'Core\Src\Peripherals\adc_snapshot.c')

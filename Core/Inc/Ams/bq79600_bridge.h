@@ -27,7 +27,9 @@ typedef enum {
     BQ79600_STEP_CONFIGURE_TOP,
     BQ79600_STEP_READ_DLL_SYNC,
     BQ79600_STEP_VERIFY_ADDRESSES,
-    BQ79600_STEP_VERIFY_BRIDGE
+    BQ79600_STEP_VERIFY_BRIDGE,
+    BQ79600_STEP_CONFIGURE_MEASUREMENT,
+    BQ79600_STEP_VERIFY_MEASUREMENT
 } bq79600_bringup_step_t;
 
 typedef struct {
@@ -44,5 +46,14 @@ typedef struct {
 bq79600_bringup_status_t bq79600_stack_bringup(
     SPI_HandleTypeDef *spi, uint8_t stack_devices,
     bq79600_bringup_result_t *result);
+
+/* Configure every BQ79616 for continuous cell conversion with cells_per_device
+ * active cells, and GPIO1..gpios_per_device as ADC-only (absolute voltage)
+ * inputs. Call after a successful bq79600_stack_bringup and before the RTOS
+ * scheduler starts; it busy-waits for the cell low-pass filter to settle.
+ * On failure, result->status and result->failed_step are updated. */
+bq79600_bringup_status_t bq79600_configure_measurements(
+    SPI_HandleTypeDef *spi, uint8_t stack_devices, uint8_t cells_per_device,
+    uint8_t gpios_per_device, bq79600_bringup_result_t *result);
 
 #endif /* BQ79600_BRIDGE_H */
