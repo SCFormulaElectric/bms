@@ -22,7 +22,7 @@
 - thermistor part number and validated ADC-code-to-temperature conversion
   (GPIOs are currently read only as voltages; see `CAN_BMS_MSG_GPIO_GROUPS`);
 - which BQ79616 GPIO pins the daughterboard thermistors use (firmware assumes
-  GPIO1..GPIO4) and wiring of unused VC inputs for a six-cell bench stack;
+  GPIO1..GPIO4) and wiring of unused VC inputs for a 12-cell bench stack (VC13-VC16);
 - final number/order of segments and populated channels;
 - cell manufacturer limits and approved operational thresholds;
 - bench confirmation of PB3/PB4/PB6 downstream polarity, reset behavior,
