@@ -15,9 +15,9 @@ void ams_config_load_defaults(ams_config_t *config)
         return;
     }
     memset(config, 0, sizeof(*config));
-    /* Bench topology: one BQ79616 with six cells on VC0-VC6. */
+    /* Bench topology: one BQ79616 with twelve cells on VC0-VC12. */
     config->segment_count = 1U;
-    config->cells_per_segment = 6U;
+    config->cells_per_segment = 12U;
     config->temperatures_per_segment = 4U;
     config->current_adc_channel = 0U;
     config->current_sensor_polarity = AMS_CURRENT_POLARITY_NORMAL;
