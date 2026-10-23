@@ -82,6 +82,15 @@ void ams_afe_bring_up(app_data_t *data)
             data->config.segment_count, data->config.cells_per_segment,
             data->config.temperatures_per_segment, &bringup);
     }
+#if AMS_BALANCE_BENCH_TEST_CELL != 0U
+    if (bringup.status == BQ79600_BRINGUP_OK &&
+        AMS_BALANCE_BENCH_TEST_CELL <= data->config.cells_per_segment) {
+        /* Bench-only timed bleed of one cell; see ams_config.h. */
+        (void)bq79600_start_single_cell_balance(&hspi1, 1U,
+            AMS_BALANCE_BENCH_TEST_CELL, AMS_BALANCE_BENCH_TEST_TIMER,
+            &bringup);
+    }
+#endif
     if (bringup.status != BQ79600_BRINGUP_OK &&
         bringup.failed_step >= BQ79600_STEP_STACK_WAKE) {
         /* The bridge is awake, so record why the stack did not answer. */

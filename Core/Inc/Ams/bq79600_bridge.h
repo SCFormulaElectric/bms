@@ -30,7 +30,9 @@ typedef enum {
     BQ79600_STEP_VERIFY_BRIDGE,
     BQ79600_STEP_CONFIGURE_MEASUREMENT,
     BQ79600_STEP_VERIFY_MEASUREMENT,
-    BQ79600_STEP_DISABLE_COMM_TIMEOUT    /* DEBUG builds only */
+    BQ79600_STEP_DISABLE_COMM_TIMEOUT,   /* DEBUG builds only */
+    BQ79600_STEP_CONFIGURE_BALANCE,      /* bench balance test only */
+    BQ79600_STEP_VERIFY_BALANCE
 } bq79600_bringup_step_t;
 
 typedef struct {
@@ -90,5 +92,15 @@ bq79600_bringup_status_t bq79600_configure_measurements(
  * SPI must not be running DMA transfers. */
 bq79600_bringup_status_t bq79600_read_comm_diagnostics(
     SPI_HandleTypeDef *spi, bq79600_comm_diag_t *diag);
+
+/* Bench-only: bleed one cell of stack device <device> through its balance
+ * resistor in manual mode until the BQ79616's own timer expires (timer_code
+ * is a CB_CELLn_CTRL TIME code). Clears every other channel's timer and reads
+ * the selected one back before BAL_GO. Fault stop and OTCB stay disabled, so
+ * the timer is the only limit; an MCU reset does not stop it. Call after
+ * bq79600_configure_measurements while the AFE reader is idle (blocking). */
+bq79600_bringup_status_t bq79600_start_single_cell_balance(
+    SPI_HandleTypeDef *spi, uint8_t device, uint8_t cell, uint8_t timer_code,
+    bq79600_bringup_result_t *result);
 
 #endif /* BQ79600_BRIDGE_H */

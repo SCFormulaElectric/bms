@@ -24,6 +24,14 @@
  * external 12 V interface polarity and shutdown behavior are bench-tested. */
 #define AMS_HARDWARE_OUTPUTS_COMMISSIONED   0U
 
+/* Bench-only: set to 1..cells_per_segment to bleed that cell of segment 1
+ * through its 100 ohm balance resistor (about 40 mA, 0.15 W) once at boot.
+ * The BQ79616 timer ends it after AMS_BALANCE_BENCH_TEST_TIMER, a
+ * CB_CELLn_CTRL TIME code (0x01 = 10 s, 0x02 = 30 s, 0x03 = 60 s). Fault
+ * stop and OTCB are not enabled. 0U disables. */
+#define AMS_BALANCE_BENCH_TEST_CELL         0U
+#define AMS_BALANCE_BENCH_TEST_TIMER        0x03U
+
 typedef struct {
     uint16_t cell_mv;
     uint16_t soc_permille;

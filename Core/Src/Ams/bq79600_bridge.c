@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Ams/ams_config.h"
+#include "Ams/bq79616_balance.h"
 #include "Ams/bq79616_measurement.h"
 #include "Ams/bq796xx_protocol.h"
 #include "Peripherals/digital_pins.h"
@@ -652,6 +653,65 @@ bq79600_bringup_status_t bq79600_read_comm_diagnostics(
         if (diag->probe_status != BQ79600_BRINGUP_OK) {
             (void)comm_clear(spi);
         }
+    }
+    return status;
+}
+
+bq79600_bringup_status_t bq79600_start_single_cell_balance(
+    SPI_HandleTypeDef *spi, uint8_t device, uint8_t cell, uint8_t timer_code,
+    bq79600_bringup_result_t *result)
+{
+    bq79600_bringup_result_t local_result = {0};
+    bq79600_bringup_status_t status;
+    uint8_t timers[BQ79616_CB_CHANNELS];
+    uint8_t response[BQ79600_RESPONSE_BYTES_ONE_REGISTER];
+    const uint16_t timer_address = bq79616_cb_ctrl_address(cell);
+    uint8_t value = 0U;
+
+    if (result == NULL) {
+        result = &local_result;
+    }
+    if (spi == NULL || spi->Instance != SPI1 || device == 0U ||
+        device > AMS_MAX_SEGMENTS || cell > AMS_MAX_CELLS_PER_SEGMENT ||
+        bq79616_single_cell_balance_timers(cell, timer_code, timers) == 0U) {
+        set_failure(result, BQ79600_BRINGUP_INVALID_ARGUMENT,
+            BQ79600_STEP_CONFIGURE_BALANCE);
+        return result->status;
+    }
+
+    /* A write frame carries at most eight data bytes. */
+    status = write_registers(spi, BQ796XX_SINGLE, device,
+        BQ79616_REG_CB_CELL16_CTRL, timers, 8U);
+    if (status == BQ79600_BRINGUP_OK) {
+        status = write_registers(spi, BQ796XX_SINGLE, device,
+            (uint16_t)(BQ79616_REG_CB_CELL16_CTRL + 8U), &timers[8], 8U);
+    }
+    if (status != BQ79600_BRINGUP_OK) {
+        set_failure(result, status, BQ79600_STEP_CONFIGURE_BALANCE);
+        return status;
+    }
+
+    status = read_registers(spi, BQ796XX_SINGLE, device, timer_address, 1U,
+        response);
+    if (status == BQ79600_BRINGUP_OK) {
+        status = validate_response(response, device, timer_address, &value);
+        if (status != BQ79600_BRINGUP_OK) {
+            (void)comm_clear(spi);
+        }
+    }
+    if (status == BQ79600_BRINGUP_OK && value != timer_code) {
+        status = BQ79600_BRINGUP_RESPONSE_FORMAT;
+    }
+    if (status != BQ79600_BRINGUP_OK) {
+        set_failure(result, status, BQ79600_STEP_VERIFY_BALANCE);
+        return status;
+    }
+
+    /* Manual mode turns on every channel with a nonzero timer: here, one. */
+    status = write_register(spi, BQ796XX_SINGLE, device,
+        BQ79616_REG_BAL_CTRL2, BQ79616_BAL_CTRL2_BAL_GO);
+    if (status != BQ79600_BRINGUP_OK) {
+        set_failure(result, status, BQ79600_STEP_CONFIGURE_BALANCE);
     }
     return status;
 }

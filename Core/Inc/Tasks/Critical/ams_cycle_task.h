@@ -8,7 +8,8 @@
 #define AMS_AFE_BRINGUP_RETRY_MS  2000U
 
 /* Blocking BQ79600/BQ79616 bring-up and measurement configuration for
- * data->config, followed on failure by the bridge diagnostics; publishes the
+ * data->config, then the bench balance test when AMS_BALANCE_BENCH_TEST_CELL
+ * is set, followed on failure by the bridge diagnostics; publishes the
  * results to data. Call before the scheduler starts, or from the AMS task
  * while the AFE reader is idle (it busy-waits for tens of milliseconds). */
 void ams_afe_bring_up(app_data_t *data);

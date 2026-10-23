@@ -40,6 +40,11 @@ $tests = @(
             'Core\Src\Ams\bq796xx_protocol.c')
     },
     @{
+        Name = 'bq79616_balance'
+        Sources = @('tests\host\test_bq79616_balance.c',
+            'Core\Src\Ams\bq79616_balance.c')
+    },
+    @{
         Name = 'bq79600_reader'
         Sources = @('tests\host\test_bq79600_reader.c',
             'Core\Src\Ams\bq79600_reader.c',
