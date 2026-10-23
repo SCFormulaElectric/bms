@@ -16,6 +16,9 @@ typedef struct {
     uint8_t bridge_device_config;
     uint32_t bringup_attempts;
     bq79600_comm_diag_t diag;
+    bq79616_balance_status_t balance;
+    uint8_t balance_read_status;
+    uint32_t balance_reads;
     uint32_t afe_samples;
     uint32_t afe_errors;
     uint8_t afe_last_error;
@@ -160,6 +163,53 @@ static void append_diagnostics(const bq79600_comm_diag_t *diag)
         (unsigned)diag->probe_frame[6]);
 }
 
+#if AMS_BALANCE_BENCH_TEST_CELL != 0U
+/* Bench balance test: BAL_STAT flags, remaining time of the balanced cell
+ * and the per-cell done mask, as last read by the AMS task. */
+static void append_balance(void)
+{
+    static const struct {
+        uint8_t mask;
+        const char *name;
+    } flags[] = {
+        {BQ79616_BAL_STAT_CB_RUN, " RUN"},
+        {BQ79616_BAL_STAT_CB_DONE, " DONE"},
+        {BQ79616_BAL_STAT_CB_INPAUSE, " PAUSED"},
+        {BQ79616_BAL_STAT_OT_PAUSE_DET, " OT_PAUSE"},
+        {BQ79616_BAL_STAT_ABORTFLT, " ABORTFLT"},
+        {BQ79616_BAL_STAT_INVALID_CBCONF, " INVALID_CONF"}
+    };
+    const bq79616_balance_status_t *balance = &snapshot.balance;
+    const uint32_t remaining_s = bq79616_bal_time_seconds(balance->bal_time);
+    size_t index;
+
+    append("balance_cell=%u reads=%lu read=%u %s\r\n",
+        (unsigned)AMS_BALANCE_BENCH_TEST_CELL,
+        (unsigned long)snapshot.balance_reads,
+        (unsigned)snapshot.balance_read_status,
+        NAME_OF(bringup_status_names, snapshot.balance_read_status));
+    if (snapshot.balance_reads == 0U ||
+        snapshot.balance_read_status != (uint8_t)BQ79600_BRINGUP_OK) {
+        return;
+    }
+    append("balance_stat=0x%02X", (unsigned)balance->bal_stat);
+    for (index = 0U; index < sizeof(flags) / sizeof(flags[0]); index++) {
+        if ((balance->bal_stat & flags[index].mask) != 0U) {
+            append("%s", flags[index].name);
+        }
+    }
+    append("%s\r\n", (balance->bal_stat == 0U) ? " IDLE" : "");
+    if (remaining_s == BQ79616_BAL_TIME_UNKNOWN_S) {
+        append("balance_remaining=not started (raw 0x%02X)\r\n",
+            (unsigned)balance->bal_time);
+    } else {
+        append("balance_remaining=%lu s (raw 0x%02X)\r\n",
+            (unsigned long)remaining_s, (unsigned)balance->bal_time);
+    }
+    append("balance_cells_done=0x%04X\r\n", (unsigned)balance->cells_done);
+}
+#endif
+
 static void take_snapshot(const app_data_t *data)
 {
     taskENTER_CRITICAL();
@@ -170,6 +220,9 @@ static void take_snapshot(const app_data_t *data)
     snapshot.bridge_device_config = data->afe_bridge_device_config;
     snapshot.bringup_attempts = data->afe_bringup_attempts;
     snapshot.diag = data->afe_comm_diag;
+    snapshot.balance = data->balance_status;
+    snapshot.balance_read_status = data->balance_read_status;
+    snapshot.balance_reads = data->balance_reads;
     snapshot.afe_samples = data->afe_sample_counter;
     snapshot.afe_errors = data->afe_communication_errors;
     snapshot.afe_last_error = data->afe_last_error;
@@ -214,6 +267,9 @@ static void build_report(void)
     append("active_faults=0x%08lX\r\n", (unsigned long)snapshot.active_faults);
     append("latched_faults=0x%08lX\r\n",
         (unsigned long)snapshot.latched_faults);
+#if AMS_BALANCE_BENCH_TEST_CELL != 0U
+    append_balance();
+#endif
 
     if (measurement->status != AMS_SAMPLE_VALID) {
         append("cells=no valid sample\r\n");

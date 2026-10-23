@@ -2,6 +2,7 @@
 #define BQ79600_BRIDGE_H
 
 #include <stdint.h>
+#include "Ams/bq79616_balance.h"
 #include "stm32f4xx_hal.h"
 
 typedef enum {
@@ -102,5 +103,12 @@ bq79600_bringup_status_t bq79600_read_comm_diagnostics(
 bq79600_bringup_status_t bq79600_start_single_cell_balance(
     SPI_HandleTypeDef *spi, uint8_t device, uint8_t cell, uint8_t timer_code,
     bq79600_bringup_result_t *result);
+
+/* Bench-only: read BAL_STAT, CB_COMPLETE1/2 and <cell>'s remaining balance
+ * time (BAL_TIME) from stack device <device>. Blocking, about 1 ms; call
+ * only while the AFE reader is idle (between samples). */
+bq79600_bringup_status_t bq79600_read_balance_status(
+    SPI_HandleTypeDef *spi, uint8_t device, uint8_t cell,
+    bq79616_balance_status_t *balance);
 
 #endif /* BQ79600_BRIDGE_H */

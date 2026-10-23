@@ -78,6 +78,11 @@ typedef struct app_data_s {
     /* Bridge registers captured when bring-up failed after the bridge was
      * awake (afe_bringup_failed_step >= BQ79600_STEP_STACK_WAKE). */
     bq79600_comm_diag_t afe_comm_diag;
+    /* Bench balance test only (AMS_BALANCE_BENCH_TEST_CELL != 0): latest
+     * status read and the bq79600_bringup_status_t of that read. */
+    bq79616_balance_status_t balance_status;
+    volatile uint8_t balance_read_status;
+    volatile uint32_t balance_reads;
     /* Runtime AFE reader counters; last_error is the most recent failure
      * (bq79600_reader_error_t) and is not cleared by later good samples. */
     volatile uint32_t afe_sample_counter;

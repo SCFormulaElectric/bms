@@ -140,6 +140,9 @@ void ams_cycle_task(void *argument)
 #ifdef DEBUG
     uint32_t last_bringup_ms = (uint32_t)HAL_GetTick();
 #endif
+#if AMS_BALANCE_BENCH_TEST_CELL != 0U
+    uint32_t last_balance_ms = 0U;
+#endif
     ams_afe_status_t afe_status;
 
     ams_battery_initialize(&battery, config, data->initial_soc_permille);
@@ -257,6 +260,26 @@ void ams_cycle_task(void *argument)
                 data->afe_bridge_device_config);
             last_telemetry_ms = now_ms;
         }
+#if AMS_BALANCE_BENCH_TEST_CELL != 0U
+        /* Bench balance test: right after a sample the AFE reader is idle
+         * until the next ams_afe_service call, so a short blocking read of
+         * the balance status cannot collide with its DMA transfers. */
+        if (afe_status == AMS_AFE_NEW_SAMPLE &&
+            (uint32_t)(now_ms - last_balance_ms) >=
+                AMS_BALANCE_STATUS_PERIOD_MS) {
+            bq79616_balance_status_t balance = {0};
+            const bq79600_bringup_status_t read =
+                bq79600_read_balance_status(&hspi1, 1U,
+                    AMS_BALANCE_BENCH_TEST_CELL, &balance);
+
+            last_balance_ms = now_ms;
+            taskENTER_CRITICAL();
+            data->balance_status = balance;
+            data->balance_read_status = (uint8_t)read;
+            data->balance_reads++;
+            taskEXIT_CRITICAL();
+        }
+#endif
         xEventGroupSetBits(data->watchdog_events, WD_AMS_CYCLE);
 
         vTaskDelay(pdMS_TO_TICKS(AMS_CRITICAL_CYCLE_PERIOD_MS));

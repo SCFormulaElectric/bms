@@ -715,3 +715,54 @@ bq79600_bringup_status_t bq79600_start_single_cell_balance(
     }
     return status;
 }
+
+bq79600_bringup_status_t bq79600_read_balance_status(
+    SPI_HandleTypeDef *spi, uint8_t device, uint8_t cell,
+    bq79616_balance_status_t *balance)
+{
+    uint8_t response[BQ79616_RESPONSE_OVERHEAD_BYTES + 3U];
+    uint8_t data[3];
+    uint8_t responder;
+    uint16_t address;
+    bq796xx_response_status_t parse_status;
+    bq79600_bringup_status_t status;
+    const uint8_t request = bq79616_bal_time_request(cell);
+
+    if (spi == NULL || spi->Instance != SPI1 || balance == NULL ||
+        device == 0U || device > AMS_MAX_SEGMENTS || request == 0U) {
+        return BQ79600_BRINGUP_INVALID_ARGUMENT;
+    }
+
+    /* Latch the selected channel's remaining time into BAL_TIME. */
+    status = write_register(spi, BQ796XX_SINGLE, device,
+        BQ79616_REG_BAL_CTRL3, request);
+    if (status == BQ79600_BRINGUP_OK) {
+        status = read_registers(spi, BQ796XX_SINGLE, device,
+            BQ79616_REG_BAL_STAT, 1U, response);
+    }
+    if (status == BQ79600_BRINGUP_OK) {
+        status = validate_response(response, device, BQ79616_REG_BAL_STAT,
+            &balance->bal_stat);
+        if (status != BQ79600_BRINGUP_OK) {
+            (void)comm_clear(spi);
+        }
+    }
+    if (status == BQ79600_BRINGUP_OK) {
+        status = read_block(spi, BQ796XX_SINGLE, device,
+            BQ79616_REG_CB_COMPLETE1, sizeof(data), 1U, response);
+    }
+    if (status != BQ79600_BRINGUP_OK) {
+        return status;
+    }
+    parse_status = bq796xx_parse_response(response, sizeof(response),
+        &responder, &address, data, sizeof(data));
+    if (parse_status != BQ796XX_RESPONSE_OK || responder != device ||
+        address != BQ79616_REG_CB_COMPLETE1) {
+        (void)comm_clear(spi);
+        return (parse_status == BQ796XX_RESPONSE_BAD_CRC) ?
+            BQ79600_BRINGUP_RESPONSE_CRC : BQ79600_BRINGUP_RESPONSE_FORMAT;
+    }
+    balance->cells_done = (uint16_t)(((uint16_t)data[0] << 8) | data[1]);
+    balance->bal_time = data[2];
+    return BQ79600_BRINGUP_OK;
+}

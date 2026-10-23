@@ -25,14 +25,16 @@
 #define AMS_HARDWARE_OUTPUTS_COMMISSIONED   0U
 
 /* Bench-only: set to 1..cells_per_segment to bleed that cell of segment 1
- * once after bring-up. The current flows through the two 10 ohm CB
- * resistors and the internal FET: about Vcell / 22 ohm, so ~180 mA and
- * ~0.33 W per 1210 resistor at 4 V (~90 mA at 2 V).
+ * once after bring-up. The current flows through the two CB resistors
+ * (reworked to 100 ohm; the schematic still shows 10 ohm) and the internal
+ * FET: about Vcell / 200 ohm, so ~20 mA and ~0.04 W per resistor at 4 V.
  * The BQ79616 timer ends it after AMS_BALANCE_BENCH_TEST_TIMER, a
  * CB_CELLn_CTRL TIME code (0x01 = 10 s, 0x02 = 30 s, 0x03 = 60 s). Fault
- * stop and OTCB are not enabled. 0U disables. */
+ * stop and OTCB are not enabled. 0U disables. While enabled, the balance
+ * status and remaining time are read every AMS_BALANCE_STATUS_PERIOD_MS. */
 #define AMS_BALANCE_BENCH_TEST_CELL         0U
 #define AMS_BALANCE_BENCH_TEST_TIMER        0x03U
+#define AMS_BALANCE_STATUS_PERIOD_MS        1000U
 
 typedef struct {
     uint16_t cell_mv;
