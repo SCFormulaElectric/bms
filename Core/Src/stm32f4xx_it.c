@@ -61,6 +61,7 @@ extern DMA_HandleTypeDef hdma_adc1;
 extern DMA_HandleTypeDef hdma_spi1_rx;
 extern DMA_HandleTypeDef hdma_spi1_tx;
 extern CAN_HandleTypeDef hcan1;
+extern UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN EV */
 
@@ -223,6 +224,11 @@ void CAN1_RX0_IRQHandler(void)
 void CAN1_SCE_IRQHandler(void)
 {
   HAL_CAN_IRQHandler(&hcan1);
+}
+
+void USART1_IRQHandler(void)
+{
+  HAL_UART_IRQHandler(&huart1);
 }
 
 /* USER CODE BEGIN 1 */

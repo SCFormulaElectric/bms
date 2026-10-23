@@ -26,6 +26,15 @@ daughterboards.
 - TI-reference-tested BQ796xx command frame and CRC codec;
 - nonblocking SPI/DMA acquisition framework and host tests.
 
+## UART diagnostic console
+
+USART1 on J5 (PA9 TX, PA10 RX) prints a status report once per second at
+115200 8N1: AFE bring-up status and failed step, verified segments, bridge
+DEVICE_CONFIG, AFE sample/error counters and last reader error, AMS state,
+fault masks, and every valid `cell[n]` and `gpio[n]` voltage (1-based across
+the pack), pack voltage/current and SOC. It is transmit-only, interrupt-driven
+and runs at low priority, so it never delays the critical task.
+
 ## Safety status
 
 This firmware is not ready to energize the tractive system. The compile-time

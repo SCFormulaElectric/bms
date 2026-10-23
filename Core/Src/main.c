@@ -31,6 +31,7 @@
 #include "Ams/bq79600_bridge.h"
 #include "Peripherals/can_bus.h"
 #include "Peripherals/digital_pins.h"
+#include "Tasks/Critical/ams_cycle_task.h"
 #include "stm32f4xx_hal_adc.h"
 /* USER CODE END Includes */
 
@@ -63,6 +64,8 @@ DMA_HandleTypeDef hdma_spi1_tx;
 
 TIM_HandleTypeDef htim2;
 
+UART_HandleTypeDef huart1;
+
 /* Definitions for defaultTask */
 // osThreadId_t defaultTaskHandle;
 // const osThreadAttr_t defaultTask_attributes = {
@@ -81,6 +84,7 @@ static void MX_CAN1_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_USART1_UART_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
@@ -114,7 +118,10 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+#ifdef DEBUG
+  /* Stop the IWDG while the core is halted so breakpoints do not reset. */
+  __HAL_DBGMCU_FREEZE_IWDG();
+#endif
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -128,30 +135,16 @@ int main(void)
   MX_TIM2_Init();
   MX_CAN1_Init();
   MX_SPI1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  {
-    bq79600_bringup_result_t bringup;
-
-    /* Topology is required by auto-addressing, so load the persisted runtime
-     * configuration before bringing the daisy chain online. */
-    ams_config_load_defaults(&app.config);
-    bms_summary_config_load_defaults(&app.summary_config);
-    app.initial_soc_permille = 500U;
-    (void)ams_persistence_load(&app.config, &app.summary_config,
-        &app.initial_soc_permille, NULL);
-    (void)bq79600_stack_bringup(&hspi1, app.config.segment_count, &bringup);
-    if (bringup.status == BQ79600_BRINGUP_OK)
-    {
-      /* GPIO thermistor inputs are read as voltages, not temperatures. */
-      (void)bq79600_configure_measurements(&hspi1, app.config.segment_count,
-          app.config.cells_per_segment, app.config.temperatures_per_segment,
-          &bringup);
-    }
-    app.afe_bringup_status = (uint8_t)bringup.status;
-    app.afe_bringup_failed_step = (uint8_t)bringup.failed_step;
-    app.afe_verified_devices = bringup.verified_stack_devices;
-    app.afe_bridge_device_config = bringup.bridge_device_config;
-  }
+  /* Topology is required by auto-addressing, so load the persisted runtime
+   * configuration before bringing the daisy chain online. */
+  ams_config_load_defaults(&app.config);
+  bms_summary_config_load_defaults(&app.summary_config);
+  app.initial_soc_permille = 500U;
+  (void)ams_persistence_load(&app.config, &app.summary_config,
+      &app.initial_soc_permille, NULL);
+  ams_afe_bring_up(&app);
   if (app.afe_bringup_status != (uint8_t)BQ79600_BRINGUP_OK)
   {
     /* The critical task will latch the AFE communication fault. Keep booting
@@ -469,6 +462,40 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  /* J5 diagnostic console. APB2 is 84 MHz, so 115200 baud is 0.02 % off. */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
 
 }
 

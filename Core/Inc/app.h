@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "Ams/ams_types.h"
+#include "Ams/bq79600_bridge.h"
 #include "FreeRTOS.h"
 #include "main.h"
 #include "Peripherals/can_bus.h"
@@ -15,12 +16,13 @@
 #include "queue.h"
 #include "task.h"
 
-#define NUM_TASKS              6U
+#define NUM_TASKS              7U
 #define AMS_CYCLE_PRIO         16U
 #define IWDG_PRIO              16U
 #define CAN_PRIO               10U
 #define BMS_CONFIG_PRIO         8U
 #define BMS_SUMMARY_PRIO        4U
+#define UART_BROADCAST_PRIO     3U
 #define STATUS_LED_PRIO         2U
 
 #define CAN_QUEUE_LENGTH       16U
@@ -61,6 +63,9 @@ typedef struct app_data_s {
     volatile int16_t maximum_temperature_dc;
     volatile uint16_t valid_cell_count;
     volatile uint16_t valid_temperature_count;
+    /* Most recent valid AFE sample (per-cell and GPIO voltages), kept for
+     * inspection; never cleared while a new sample is being read. */
+    ams_measurement_t last_measurement;
     volatile uint8_t boot_healthy;
     ams_config_t config;
     bms_summary_config_t summary_config;
@@ -69,6 +74,15 @@ typedef struct app_data_s {
     volatile uint8_t afe_bringup_failed_step;
     volatile uint8_t afe_verified_devices;
     volatile uint8_t afe_bridge_device_config;
+    volatile uint32_t afe_bringup_attempts;
+    /* Bridge registers captured when bring-up failed after the bridge was
+     * awake (afe_bringup_failed_step >= BQ79600_STEP_STACK_WAKE). */
+    bq79600_comm_diag_t afe_comm_diag;
+    /* Runtime AFE reader counters; last_error is the most recent failure
+     * (bq79600_reader_error_t) and is not cleared by later good samples. */
+    volatile uint32_t afe_sample_counter;
+    volatile uint32_t afe_communication_errors;
+    volatile uint8_t afe_last_error;
     ams_fault_record_t first_fault;
 } app_data_t;
 

@@ -29,7 +29,8 @@ typedef enum {
     BQ79600_STEP_VERIFY_ADDRESSES,
     BQ79600_STEP_VERIFY_BRIDGE,
     BQ79600_STEP_CONFIGURE_MEASUREMENT,
-    BQ79600_STEP_VERIFY_MEASUREMENT
+    BQ79600_STEP_VERIFY_MEASUREMENT,
+    BQ79600_STEP_DISABLE_COMM_TIMEOUT    /* DEBUG builds only */
 } bq79600_bringup_step_t;
 
 typedef struct {
@@ -39,6 +40,32 @@ typedef struct {
     uint8_t verified_stack_devices;
     uint8_t bridge_device_config;
 } bq79600_bringup_result_t;
+
+/* BQ79600 fault and communication-debug registers (datasheet SLUSDS1A 7.5),
+ * read from the bridge itself after a failed bring-up. Responses from the
+ * stack arrive on COMH while CONTROL1 [DIR_SEL] = 0. */
+typedef struct {
+    bq79600_bringup_status_t read_status; /* OK when every read succeeded */
+    uint8_t device_config;     /* 0x2001: expected 0x14 */
+    uint8_t fault_summary;     /* 0x2100: FAULT_COMM/REG/SYS/PWR summary */
+    uint8_t fault_sys;         /* 0x2102 */
+    uint8_t fault_pwr;         /* 0x2103 */
+    uint8_t fault_comm1;       /* 0x2104 */
+    uint8_t fault_comm2;       /* 0x2105: SPI/COML/COMH frame and bit faults */
+    uint8_t debug_comm_stat;   /* 0x2300: reset value 0x13 */
+    uint8_t debug_spi_phy;     /* 0x2301 */
+    uint8_t debug_spi_frame;   /* 0x2302 */
+    uint8_t debug_comh_phy;    /* 0x2304 */
+    uint8_t debug_comh_frame;  /* 0x2305 */
+    uint8_t debug_coml_phy;    /* 0x2306 */
+    uint8_t debug_coml_frame;  /* 0x2307 */
+    /* Single-device read of DIR0_ADDR from stack device 1, sent after the
+     * register reads above. TI forbids broadcast reads through the bridge,
+     * so this asks the one device the stack read could not reach. */
+    bq79600_bringup_status_t probe_status;
+    uint8_t probe_address;     /* DIR0_ADDR value, valid when probe is OK */
+    uint8_t probe_frame[7];    /* raw response bytes, for a bad frame */
+} bq79600_comm_diag_t;
 
 /* Complete forward-direction BQ79600 + BQ79616 startup and auto-addressing.
  * stack_devices is the number of BQ79616 daughterboards and excludes the
@@ -55,5 +82,13 @@ bq79600_bringup_status_t bq79600_stack_bringup(
 bq79600_bringup_status_t bq79600_configure_measurements(
     SPI_HandleTypeDef *spi, uint8_t stack_devices, uint8_t cells_per_device,
     uint8_t gpios_per_device, bq79600_bringup_result_t *result);
+
+/* Read the bridge's DEVICE_CONFIG, fault and comm-debug registers into
+ * *diag, stopping at the first failed read (recorded in diag->read_status),
+ * then probe stack device 1 with one single-device read (diag->probe_*).
+ * Intended after a bring-up failure once the bridge is awake. Blocking; the
+ * SPI must not be running DMA transfers. */
+bq79600_bringup_status_t bq79600_read_comm_diagnostics(
+    SPI_HandleTypeDef *spi, bq79600_comm_diag_t *diag);
 
 #endif /* BQ79600_BRIDGE_H */

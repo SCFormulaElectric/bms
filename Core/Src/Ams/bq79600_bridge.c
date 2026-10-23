@@ -13,6 +13,19 @@
 #define BQ79600_REG_CONTROL1              0x0309U
 #define BQ79600_REG_OTP_ECC_DATAIN1       0x0343U
 #define BQ79600_REG_DEVICE_CONFIG         0x2001U
+#define BQ79600_REG_COMM_TIMEOUT          0x2005U
+#define BQ79600_REG_FAULT_SUMMARY         0x2100U
+#define BQ79600_REG_FAULT_SYS             0x2102U
+#define BQ79600_REG_FAULT_PWR             0x2103U
+#define BQ79600_REG_FAULT_COMM1           0x2104U
+#define BQ79600_REG_FAULT_COMM2           0x2105U
+#define BQ79600_REG_DEBUG_COMM_STAT       0x2300U
+#define BQ79600_REG_DEBUG_SPI_PHY         0x2301U
+#define BQ79600_REG_DEBUG_SPI_FRAME       0x2302U
+#define BQ79600_REG_DEBUG_COMH_PHY        0x2304U
+#define BQ79600_REG_DEBUG_COMH_FRAME      0x2305U
+#define BQ79600_REG_DEBUG_COML_PHY        0x2306U
+#define BQ79600_REG_DEBUG_COML_FRAME      0x2307U
 #define BQ79600_CONTROL1_SEND_WAKE        0x20U
 #define BQ79600_CONTROL1_AUTO_ADDRESS     0x01U
 #define BQ79600_COMM_STACK                0x02U
@@ -23,7 +36,9 @@
 #define BQ79600_NCS_SETUP_US                 2U
 #define BQ79600_WAKE_LOW_US               2750U
 #define BQ79600_NCS_HOLD_US                  2U
-#define BQ79600_INTER_PING_US                 2U
+/* tSU(WAKE_SHUT): the second ping must follow the first by the maximum
+ * SHUTDOWN-to-ACTIVE startup time, not land while the bridge is booting. */
+#define BQ79600_INTER_PING_US              3500U
 #define BQ79600_ACTIVE_WAIT_US             3500U
 #define BQ79600_STACK_WAKE_PER_DEVICE_US   11600U
 #define BQ79600_SPI_FRAME_GUARD_US             1U
@@ -442,6 +457,32 @@ bq79600_bringup_status_t bq79600_stack_bringup(
         return result->status;
     }
 
+#ifdef DEBUG
+    /* By default the bridge drops to SLEEP after one minute without host
+     * traffic, which a long breakpoint triggers and nothing re-wakes. */
+    status = write_register(spi, BQ796XX_SINGLE, 0U,
+        BQ79600_REG_COMM_TIMEOUT, 0U);
+    if (status == BQ79600_BRINGUP_OK) {
+        status = read_registers(spi, BQ796XX_SINGLE, 0U,
+            BQ79600_REG_COMM_TIMEOUT, 1U, response);
+    }
+    if (status == BQ79600_BRINGUP_OK) {
+        uint8_t comm_timeout;
+
+        status = validate_response(response, 0U, BQ79600_REG_COMM_TIMEOUT,
+            &comm_timeout);
+        if (status != BQ79600_BRINGUP_OK) {
+            (void)comm_clear(spi);
+        } else if (comm_timeout != 0U) {
+            status = BQ79600_BRINGUP_RESPONSE_FORMAT;
+        }
+    }
+    if (status != BQ79600_BRINGUP_OK) {
+        set_failure(result, status, BQ79600_STEP_DISABLE_COMM_TIMEOUT);
+        return status;
+    }
+#endif
+
     result->status = BQ79600_BRINGUP_OK;
     result->failed_step = BQ79600_STEP_NONE;
     return BQ79600_BRINGUP_OK;
@@ -538,4 +579,79 @@ bq79600_bringup_status_t bq79600_configure_measurements(
 
     delay_us(BQ79616_LPF_VCELL_26HZ_SETTLE_US + 5U * stack_devices);
     return BQ79600_BRINGUP_OK;
+}
+
+bq79600_bringup_status_t bq79600_read_comm_diagnostics(
+    SPI_HandleTypeDef *spi, bq79600_comm_diag_t *diag)
+{
+    static const struct {
+        uint16_t address;
+        size_t offset;
+    } registers[] = {
+        {BQ79600_REG_DEVICE_CONFIG,
+            offsetof(bq79600_comm_diag_t, device_config)},
+        {BQ79600_REG_FAULT_SUMMARY,
+            offsetof(bq79600_comm_diag_t, fault_summary)},
+        {BQ79600_REG_FAULT_SYS, offsetof(bq79600_comm_diag_t, fault_sys)},
+        {BQ79600_REG_FAULT_PWR, offsetof(bq79600_comm_diag_t, fault_pwr)},
+        {BQ79600_REG_FAULT_COMM1,
+            offsetof(bq79600_comm_diag_t, fault_comm1)},
+        {BQ79600_REG_FAULT_COMM2,
+            offsetof(bq79600_comm_diag_t, fault_comm2)},
+        {BQ79600_REG_DEBUG_COMM_STAT,
+            offsetof(bq79600_comm_diag_t, debug_comm_stat)},
+        {BQ79600_REG_DEBUG_SPI_PHY,
+            offsetof(bq79600_comm_diag_t, debug_spi_phy)},
+        {BQ79600_REG_DEBUG_SPI_FRAME,
+            offsetof(bq79600_comm_diag_t, debug_spi_frame)},
+        {BQ79600_REG_DEBUG_COMH_PHY,
+            offsetof(bq79600_comm_diag_t, debug_comh_phy)},
+        {BQ79600_REG_DEBUG_COMH_FRAME,
+            offsetof(bq79600_comm_diag_t, debug_comh_frame)},
+        {BQ79600_REG_DEBUG_COML_PHY,
+            offsetof(bq79600_comm_diag_t, debug_coml_phy)},
+        {BQ79600_REG_DEBUG_COML_FRAME,
+            offsetof(bq79600_comm_diag_t, debug_coml_frame)}
+    };
+    uint8_t response[BQ79600_RESPONSE_BYTES_ONE_REGISTER];
+    bq79600_bringup_status_t status = BQ79600_BRINGUP_OK;
+    uint8_t index;
+
+    if (diag == NULL) {
+        return BQ79600_BRINGUP_INVALID_ARGUMENT;
+    }
+    memset(diag, 0, sizeof(*diag));
+    if (spi == NULL || spi->Instance != SPI1) {
+        diag->read_status = BQ79600_BRINGUP_INVALID_ARGUMENT;
+        diag->probe_status = BQ79600_BRINGUP_INVALID_ARGUMENT;
+        return diag->read_status;
+    }
+    for (index = 0U; index < sizeof(registers) / sizeof(registers[0]) &&
+        status == BQ79600_BRINGUP_OK; index++) {
+        status = read_registers(spi, BQ796XX_SINGLE, 0U,
+            registers[index].address, 1U, response);
+        if (status == BQ79600_BRINGUP_OK) {
+            status = validate_response(response, 0U,
+                registers[index].address,
+                (uint8_t *)diag + registers[index].offset);
+            if (status != BQ79600_BRINGUP_OK) {
+                (void)comm_clear(spi);
+            }
+        }
+    }
+    diag->read_status = status;
+
+    /* Bridge registers are read first so they reflect the bring-up failure,
+     * not this probe. A response that parses but is wrong stays in
+     * probe_frame for inspection. */
+    diag->probe_status = read_registers(spi, BQ796XX_SINGLE, 1U,
+        BQ79600_REG_DIR0_ADDR, 1U, diag->probe_frame);
+    if (diag->probe_status == BQ79600_BRINGUP_OK) {
+        diag->probe_status = validate_response(diag->probe_frame, 1U,
+            BQ79600_REG_DIR0_ADDR, &diag->probe_address);
+        if (diag->probe_status != BQ79600_BRINGUP_OK) {
+            (void)comm_clear(spi);
+        }
+    }
+    return status;
 }

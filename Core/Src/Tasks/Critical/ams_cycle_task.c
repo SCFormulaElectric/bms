@@ -66,6 +66,48 @@ static uint8_t service_fault_clear_request(app_data_t *data,
     return 1U;
 }
 
+void ams_afe_bring_up(app_data_t *data)
+{
+    bq79600_bringup_result_t bringup;
+    bq79600_comm_diag_t diag;
+    const uint8_t scheduler_running =
+        (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) ? 1U : 0U;
+
+    memset(&diag, 0, sizeof(diag));
+    (void)bq79600_stack_bringup(&hspi1, data->config.segment_count,
+        &bringup);
+    if (bringup.status == BQ79600_BRINGUP_OK) {
+        /* GPIO thermistor inputs are read as voltages, not temperatures. */
+        (void)bq79600_configure_measurements(&hspi1,
+            data->config.segment_count, data->config.cells_per_segment,
+            data->config.temperatures_per_segment, &bringup);
+    }
+    if (bringup.status != BQ79600_BRINGUP_OK &&
+        bringup.failed_step >= BQ79600_STEP_STACK_WAKE) {
+        /* The bridge is awake, so record why the stack did not answer. */
+        (void)bq79600_read_comm_diagnostics(&hspi1, &diag);
+        if (bringup.bridge_device_config == 0U &&
+            diag.read_status == BQ79600_BRINGUP_OK) {
+            bringup.bridge_device_config = diag.device_config;
+        }
+    }
+
+    /* Before the scheduler starts a critical section would leave interrupts
+     * masked until vTaskStartScheduler, and no other task can read yet. */
+    if (scheduler_running != 0U) {
+        taskENTER_CRITICAL();
+    }
+    data->afe_bringup_status = (uint8_t)bringup.status;
+    data->afe_bringup_failed_step = (uint8_t)bringup.failed_step;
+    data->afe_verified_devices = bringup.verified_stack_devices;
+    data->afe_bridge_device_config = bringup.bridge_device_config;
+    data->afe_comm_diag = diag;
+    data->afe_bringup_attempts++;
+    if (scheduler_running != 0U) {
+        taskEXIT_CRITICAL();
+    }
+}
+
 static int32_t sum_pack_voltage(const ams_measurement_t *measurement)
 {
     uint16_t index;
@@ -86,6 +128,9 @@ void ams_cycle_task(void *argument)
     static ams_can_cursor_t can_cursor;
     const ams_config_t *config = &data->config;
     uint32_t last_telemetry_ms = 0U;
+#ifdef DEBUG
+    uint32_t last_bringup_ms = (uint32_t)HAL_GetTick();
+#endif
     ams_afe_status_t afe_status;
 
     ams_battery_initialize(&battery, config, data->initial_soc_permille);
@@ -105,6 +150,23 @@ void ams_cycle_task(void *argument)
             vTaskDelay(pdMS_TO_TICKS(AMS_CRITICAL_CYCLE_PERIOD_MS));
             continue;
         }
+
+#ifdef DEBUG
+        /* Bench aid: retry a failed bring-up so the stack can be powered or
+         * rewired without resetting the MCU. The AFE reader has never run,
+         * so the SPI is idle. Each attempt busy-waits for tens of ms and
+         * masks interrupts during the two 2.75 ms wake pings. */
+        if (data->afe_bringup_status != (uint8_t)BQ79600_BRINGUP_OK &&
+            (uint32_t)(now_ms - last_bringup_ms) >=
+                AMS_AFE_BRINGUP_RETRY_MS) {
+            ams_afe_bring_up(data);
+            last_bringup_ms = (uint32_t)HAL_GetTick();
+            /* now_ms is stale after the busy-wait; start a fresh cycle. */
+            xEventGroupSetBits(data->watchdog_events, WD_AMS_CYCLE);
+            vTaskDelay(pdMS_TO_TICKS(AMS_CRITICAL_CYCLE_PERIOD_MS));
+            continue;
+        }
+#endif
 
         /* The BQ79616s convert continuously (configured at boot). The AFE
          * pipeline reads the latest results over DMA without blocking; poll
@@ -167,8 +229,12 @@ void ams_cycle_task(void *argument)
             data->valid_cell_count = measurement.valid_cell_count;
             data->valid_temperature_count =
                 measurement.valid_temperature_count;
+            data->last_measurement = measurement;
         }
         data->first_fault = controller.decision.first_fault;
+        data->afe_sample_counter = afe.sample_counter;
+        data->afe_communication_errors = afe.communication_errors;
+        data->afe_last_error = (uint8_t)afe.last_error;
         taskEXIT_CRITICAL();
 
         if (CAN_BMS_FAST_TELEMETRY_ENABLED &&

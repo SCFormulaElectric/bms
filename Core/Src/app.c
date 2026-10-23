@@ -37,6 +37,8 @@ void create_app(void)
     app.task_entries[bms_config_task_index] = create_bms_config_task(&app);
     app.task_entries[bms_summary_task_index] = create_bms_summary_task(&app);
     app.task_entries[status_led_task_index] = create_status_led_task(&app);
+    app.task_entries[uart_broadcast_task_index] =
+        create_uart_broadcast_task(&app);
     app.task_entries[independent_watchdog_task_index] =
         create_independent_watchdog_task(&app);
 
