@@ -14,6 +14,7 @@ typedef struct {
     uint8_t configured_devices;
     uint8_t verified_devices;
     uint8_t bridge_device_config;
+    uint8_t bridge_response_valid;
     uint32_t bringup_attempts;
     bq79600_comm_diag_t diag;
     bq79616_balance_status_t balance;
@@ -218,6 +219,7 @@ static void take_snapshot(const app_data_t *data)
     snapshot.configured_devices = data->config.segment_count;
     snapshot.verified_devices = data->afe_verified_devices;
     snapshot.bridge_device_config = data->afe_bridge_device_config;
+    snapshot.bridge_response_valid = data->afe_bridge_response_valid;
     snapshot.bringup_attempts = data->afe_bringup_attempts;
     snapshot.diag = data->afe_comm_diag;
     snapshot.balance = data->balance_status;
@@ -252,6 +254,8 @@ static void build_report(void)
         (unsigned)snapshot.configured_devices);
     append("afe_bridge_device_config=0x%02X\r\n",
         (unsigned)snapshot.bridge_device_config);
+    append("afe_bridge_response_valid=%u\r\n",
+        (unsigned)snapshot.bridge_response_valid);
     append("afe_bringup_attempts=%lu\r\n",
         (unsigned long)snapshot.bringup_attempts);
     if (snapshot.bringup_status != (uint8_t)BQ79600_BRINGUP_OK &&

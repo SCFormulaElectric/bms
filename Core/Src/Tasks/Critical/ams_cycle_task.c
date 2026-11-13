@@ -95,9 +95,12 @@ void ams_afe_bring_up(app_data_t *data)
         bringup.failed_step >= BQ79600_STEP_STACK_WAKE) {
         /* The bridge is awake, so record why the stack did not answer. */
         (void)bq79600_read_comm_diagnostics(&hspi1, &diag);
-        if (bringup.bridge_device_config == 0U &&
-            diag.read_status == BQ79600_BRINGUP_OK) {
-            bringup.bridge_device_config = diag.device_config;
+        if (diag.read_status == BQ79600_BRINGUP_OK) {
+            /* A CRC-valid DEVICE_CONFIG read proves the bridge answers. */
+            bringup.bridge_response_valid = 1U;
+            if (bringup.bridge_device_config == 0U) {
+                bringup.bridge_device_config = diag.device_config;
+            }
         }
     }
 
@@ -110,6 +113,7 @@ void ams_afe_bring_up(app_data_t *data)
     data->afe_bringup_failed_step = (uint8_t)bringup.failed_step;
     data->afe_verified_devices = bringup.verified_stack_devices;
     data->afe_bridge_device_config = bringup.bridge_device_config;
+    data->afe_bridge_response_valid = bringup.bridge_response_valid;
     data->afe_comm_diag = diag;
     data->afe_bringup_attempts++;
     if (scheduler_running != 0U) {
@@ -257,7 +261,8 @@ void ams_cycle_task(void *argument)
                 data->afe_bringup_status,
                 data->afe_bringup_failed_step,
                 data->afe_verified_devices,
-                data->afe_bridge_device_config);
+                data->afe_bridge_device_config,
+                data->afe_bridge_response_valid);
             last_telemetry_ms = now_ms;
         }
 #if AMS_BALANCE_BENCH_TEST_CELL != 0U

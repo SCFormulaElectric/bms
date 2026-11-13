@@ -74,6 +74,7 @@ typedef struct app_data_s {
     volatile uint8_t afe_bringup_failed_step;
     volatile uint8_t afe_verified_devices;
     volatile uint8_t afe_bridge_device_config;
+    volatile uint8_t afe_bridge_response_valid;
     volatile uint32_t afe_bringup_attempts;
     /* Bridge registers captured when bring-up failed after the bridge was
      * awake (afe_bringup_failed_step >= BQ79600_STEP_STACK_WAKE). */

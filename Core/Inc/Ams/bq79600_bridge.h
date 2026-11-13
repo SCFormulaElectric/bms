@@ -42,6 +42,7 @@ typedef struct {
     uint8_t configured_stack_devices;
     uint8_t verified_stack_devices;
     uint8_t bridge_device_config;
+    uint8_t bridge_response_valid;
 } bq79600_bringup_result_t;
 
 /* BQ79600 fault and communication-debug registers (datasheet SLUSDS1A 7.5),
