@@ -55,6 +55,12 @@ $tests = @(
         Name = 'adc_snapshot'
         Sources = @('tests\host\test_adc_snapshot.c',
             'Core\Src\Peripherals\adc_snapshot.c')
+    },
+
+    @{
+        Name = 'enepaq_temperature'
+        Sources = @('tests\host\test_enepaq_temperature.c',
+            'Core\Src\Ams\enepaq_temperature.c')
     }
 )
 
